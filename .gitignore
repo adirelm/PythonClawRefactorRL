@@ -1,0 +1,58 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Virtual env (managed by uv)
+.venv/
+venv/
+
+# Build artifacts
+dist/
+build/
+*.egg
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Local environment
+.env
+.env.local
+
+# A4-specific: instructions/ is local-only (brief PDF, slides, transcript, lecturer feedback)
+# Per project rule — must NOT be referenced in shipped docs
+instructions/
+instructions/assignment-4/
+
+# Moodle cover sheet — contains PII (ID card + personal name + self-grade); upload to moodle ONLY, never commit
+adrl-001-ex*.pdf
+
+# Runtime data (regenerated; not version-controlled)
+data/raw/
+data/processed/
+results/checkpoints/
+results/ablation/
+
+# Obsidian vault internals — keep the vault dir tracked but exclude editor state
+results/vault/.obsidian/
+
+# Notebook scratch
+.ipynb_checkpoints/
+
+# OS
+Thumbs.db
+
+# Stray PDFs (allow only those under docs/assets/)
+*.pdf
+!docs/assets/*.pdf
