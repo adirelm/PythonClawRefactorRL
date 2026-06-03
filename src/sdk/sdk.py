@@ -28,5 +28,5 @@ class RefactorSDK:
         raise NotImplementedError("RefactorSDK.evaluate — Phase 5")
 
     def run_ablation(self) -> object:
-        """Sweep α/β/γ/P_skills over ≥ 5 seeds per cell."""
+        """Sweep alpha/beta/gamma/P_skills over >= 5 seeds per cell."""
         raise NotImplementedError("RefactorSDK.run_ablation — Phase 6")

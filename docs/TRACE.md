@@ -59,23 +59,23 @@
 | Deliv-1 | Runnable CLI: `uv run main.py --algo ppo` and `--mode refactor`. | `main.py`, `src/cli/entrypoint.py` | `tests/integration/test_cli_smoke.py` | `results/cli/help_screenshot.png` | `<bootstrap-commit>` | ⬜ planned |
 | Deliv-2 | Programmatic NetworkX/pyvis screenshots; Obsidian hero shots committed. | `scripts/render_graphs.py`, `scripts/capture_obsidian.py` | `tests/integration/test_screenshot_pipeline.py` | `results/screenshots/hero_obsidian.png`, `results/screenshots/networkx_overview.png`, `docs/adr/ADR-009-screenshot-pipeline.md` | `<bootstrap-commit>` | ⬜ planned |
 | Deliv-3 | PROMPTS.md — verbatim prompts used per Phase. | n/a | `tests/architecture/test_prompts_freshness.py` | `docs/shared/PROMPTS.md` | `<bootstrap-commit>` | ⬜ planned |
-| Deliv-4 | CLAUDE.md global standards (≤150 LOC, TDD, OOP, no hardcoded values, DRY, ruff clean, uv-only). | `CLAUDE.md` | `tests/architecture/test_file_size_limit.py` | n/a | `<bootstrap-commit>` | ✅ done |
-| Deliv-5 | `pyproject.toml` with uv + ruff + pytest-cov ≥85% gate. | `pyproject.toml` | `tests/architecture/test_coverage_gate.py` | n/a | `<bootstrap-commit>` | ✅ done |
-| Deliv-6 | CI pipeline (lint + test + coverage + LOC guard). | `.github/workflows/ci.yml` | n/a (CI itself) | CI badge in `README.md` | `<bootstrap-commit>` | ✅ done |
-| Deliv-7 | ADR-001 PythonClaw shim boundary. | n/a (decision doc) | n/a | `docs/adr/ADR-001-pythonclaw-shim-boundary.md` | `<bootstrap-commit>` | ✅ done |
-| Deliv-8 | ADR-002 GRAPHIFY adapter. | n/a | n/a | `docs/adr/ADR-002-graphify-adapter.md` | `<bootstrap-commit>` | ✅ done |
-| Deliv-9 | ADR-003 tiktoken cost metric. | n/a | n/a | `docs/adr/ADR-003-tiktoken-cost-metric.md` | `<bootstrap-commit>` | ✅ done |
-| Deliv-10 | ADR-004 GraphSAGE vs MLP encoder. | n/a | n/a | `docs/adr/ADR-004-graphsage-vs-mlp-encoder.md` | `<bootstrap-commit>` | ✅ done |
-| Deliv-11 | ADR-005 lazy-load broken semantics. | n/a | n/a | `docs/adr/ADR-005-lazy-load-broken-semantics.md` | `<bootstrap-commit>` | ✅ done |
-| Deliv-12 | ADR-006 multi-seed eval discipline. | n/a | n/a | `docs/adr/ADR-006-multi-seed-eval-discipline.md` | `<bootstrap-commit>` | ✅ done |
-| Deliv-13 | ADR-007 reward upgrade MUST. | n/a | n/a | `docs/adr/ADR-007-reward-upgrade-MUST.md` | `<bootstrap-commit>` | ✅ done |
-| Deliv-14 | ADR-008 SB3 variable-V buffer. | n/a | n/a | `docs/adr/ADR-008-sb3-variable-v-buffer.md` | `<bootstrap-commit>` | ✅ done |
-| Deliv-15 | ADR-009 screenshot pipeline. | n/a | n/a | `docs/adr/ADR-009-screenshot-pipeline.md` | `<bootstrap-commit>` | ✅ done |
-| Deliv-16 | ADR-010 TRACE.md governance (this file's update protocol). | n/a | `tests/architecture/test_trace_freshness.py` | `docs/adr/ADR-010-trace-governance.md` | `<bootstrap-commit>` | ⬜ planned |
-| Deliv-17 | PRD-PPO — PPO product requirements. | n/a | n/a | `docs/prd/PRD-PPO.md` | `<bootstrap-commit>` | ✅ done |
-| Deliv-18 | PRD-GAE — GAE product requirements. | n/a | n/a | `docs/prd/PRD-GAE.md` | `<bootstrap-commit>` | ✅ done |
-| Deliv-19 | PRD-GRAPHIFY — graphify product requirements. | n/a | n/a | `docs/prd/PRD-GRAPHIFY.md` | `<bootstrap-commit>` | ✅ done |
-| Deliv-20 | PRD-SKILLS — skills/reward product requirements. | n/a | n/a | `docs/prd/PRD-SKILLS.md` | `<bootstrap-commit>` | ✅ done |
+| Deliv-4 | CLAUDE.md global standards (≤150 LOC, TDD, OOP, no hardcoded values, DRY, ruff clean, uv-only). | `CLAUDE.md` | `tests/architecture/test_file_size_limit.py` | n/a | `a213652` | ✅ done |
+| Deliv-5 | `pyproject.toml` with uv + ruff + pytest-cov ≥85% gate. | `pyproject.toml` | `tests/architecture/test_coverage_gate.py` | n/a | `a213652` | ✅ done |
+| Deliv-6 | CI pipeline (lint + test + coverage + LOC guard). | `.github/workflows/ci.yml` | n/a (CI itself) | CI badge in `README.md` | `a213652` | ✅ done |
+| Deliv-7 | ADR-001 PythonClaw shim boundary. | n/a (decision doc) | n/a | `docs/adr/ADR-001-pythonclaw-shim-boundary.md` | `58bf82f` | ✅ done |
+| Deliv-8 | ADR-002 GRAPHIFY adapter. | n/a | n/a | `docs/adr/ADR-002-graphify-adapter.md` | `58bf82f` | ✅ done |
+| Deliv-9 | ADR-003 tiktoken cost metric. | n/a | n/a | `docs/adr/ADR-003-tiktoken-cost-metric.md` | `58bf82f` | ✅ done |
+| Deliv-10 | ADR-004 GraphSAGE vs MLP encoder. | n/a | n/a | `docs/adr/ADR-004-graphsage-vs-mlp-encoder.md` | `58bf82f` | ✅ done |
+| Deliv-11 | ADR-005 lazy-load broken semantics. | n/a | n/a | `docs/adr/ADR-005-lazy-load-broken-semantics.md` | `58bf82f` | ✅ done |
+| Deliv-12 | ADR-006 multi-seed eval discipline. | n/a | n/a | `docs/adr/ADR-006-multi-seed-eval-discipline.md` | `58bf82f` | ✅ done |
+| Deliv-13 | ADR-007 reward upgrade MUST. | n/a | n/a | `docs/adr/ADR-007-reward-upgrade-MUST.md` | `58bf82f` | ✅ done |
+| Deliv-14 | ADR-008 SB3 variable-V buffer. | n/a | n/a | `docs/adr/ADR-008-sb3-variable-v-buffer.md` | `58bf82f` | ✅ done |
+| Deliv-15 | ADR-009 screenshot pipeline. | n/a | n/a | `docs/adr/ADR-009-screenshot-pipeline.md` | `58bf82f` | ✅ done |
+| Deliv-16 | ADR-010 dual-criterion convergence definition. | n/a | `tests/unit/test_convergence_dual_criterion.py` | `docs/adr/ADR-010-dual-convergence-criterion.md` | `58bf82f` | ✅ done |
+| Deliv-17 | PRD-PPO — PPO product requirements. | n/a | n/a | `docs/prd/PRD-PPO.md` | `58bf82f` | ✅ done |
+| Deliv-18 | PRD-GAE — GAE product requirements. | n/a | n/a | `docs/prd/PRD-GAE.md` | `58bf82f` | ✅ done |
+| Deliv-19 | PRD-GRAPHIFY — graphify product requirements. | n/a | n/a | `docs/prd/PRD-GRAPHIFY.md` | `58bf82f` | ✅ done |
+| Deliv-20 | PRD-SKILLS — skills/reward product requirements. | n/a | n/a | `docs/prd/PRD-SKILLS.md` | `58bf82f` | ✅ done |
 
 ---
 
@@ -129,9 +129,9 @@
 Phase 0 is **bootstrap-only**. It closes when:
 
 - All ✅ rows in the **Deliverables** table above resolve to real files on disk.
-- `<bootstrap-commit>` placeholders are replaced with the actual short SHA of the single `chore: bootstrap` commit (or the final Phase 0 commit if bootstrap is split).
-- `tests/architecture/test_trace_freshness.py` (added by Deliv-16, currently ⬜) passes.
-- ADR-010 lands and the TRACE governance loop is closed.
+- `<bootstrap-commit>` placeholders are replaced with the actual short SHAs of the two Phase 0 commits: bootstrap (`a213652`) for Deliv-4/5/6, planning (`58bf82f`) for Deliv-7..20.
+- `tests/architecture/test_trace_freshness.py` is authored (Phase 0 ruff-fix follow-up).
+- ADR-010 (dual-criterion convergence) has landed at `docs/adr/ADR-010-dual-convergence-criterion.md` and is referenced from PRD-PPO, the convergence service test, and this file.
 
 ## Phase 1–4 promotion rules
 
@@ -144,10 +144,17 @@ Phase 0 is **bootstrap-only**. It closes when:
 
 ## Known gaps tracked against this file
 
-- ADR-010 (TRACE governance) is referenced but not yet authored — Phase 0 task.
-- `tests/architecture/test_trace_freshness.py` is referenced but not yet authored — Phase 0 task.
-- `scripts/stamp_trace.py` is referenced but not yet authored — Phase 0 task.
-- The `results/` subtree is empty at bootstrap; each Phase 1–4 row creates its own subdirectory.
+- ADR-010 final scope = dual-criterion convergence definition (locked
+  per grade-strategy round); the "TRACE governance" responsibility
+  documented in `Phase 0 closure criteria` below is absorbed into the
+  Phase 0 ruff-fix commit and the future `scripts/stamp_trace.py` rather
+  than a separate ADR.
+- `tests/architecture/test_trace_freshness.py` is referenced but not yet
+  authored — Phase 0 ruff-fix follow-up.
+- `scripts/stamp_trace.py` is referenced but not yet authored —
+  Phase 0 ruff-fix follow-up.
+- The `results/` subtree is empty at bootstrap; each Phase 1–4 row
+  creates its own subdirectory.
 
 ## How a grader should use this file
 
