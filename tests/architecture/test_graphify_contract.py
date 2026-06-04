@@ -42,6 +42,5 @@ def test_local_graphify_satisfies_protocol() -> None:
     """LocalGraphify must structurally satisfy GraphifyAdapter (runtime_checkable)."""
     instance = LocalGraphify()
     assert isinstance(instance, GraphifyAdapter), (
-        "LocalGraphify must satisfy GraphifyAdapter Protocol "
-        "(check method names/signatures match adapter.py)"
+        "LocalGraphify must satisfy GraphifyAdapter Protocol (check method names/signatures match adapter.py)"
     )

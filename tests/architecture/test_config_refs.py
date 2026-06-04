@@ -54,6 +54,5 @@ def test_no_stale_split_config_refs_in_docs(repo_root: Path) -> None:
     # but docs/ should never reference them.
     assert not hits, (
         "Found stale split-config references in docs/ — replace with "
-        "`config/config.yaml#<block>` notation per CLAUDE.md §4:\n"
-        + "\n".join(hits)
+        "`config/config.yaml#<block>` notation per CLAUDE.md §4:\n" + "\n".join(hits)
     )

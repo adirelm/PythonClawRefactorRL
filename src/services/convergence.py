@@ -6,6 +6,7 @@ Stub for Phase 1+ implementation. Real impl will:
 - Check entropy slope: |dH/dt| < entropy_slope_threshold (default 0.01 nats/ep)
 - Emit ConvergenceVerdict per seed; PARTIAL_CONVERGENCE supported
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass

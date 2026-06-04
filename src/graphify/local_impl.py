@@ -39,13 +39,9 @@ class LocalGraphify:
             src_root,
             seed,
         )
-        raise NotImplementedError(
-            "LocalGraphify.build is a Phase 0 stub; implementation lands in Phase 1+."
-        )
+        raise NotImplementedError("LocalGraphify.build is a Phase 0 stub; implementation lands in Phase 1+.")
 
     def load(self, pickle_path: Path) -> _DiGraph:
         """Load previously-built graph from pickle (Phase 1+ pending)."""
         logger.info("LocalGraphify.load: Phase 1+ pending (pickle=%s)", pickle_path)
-        raise NotImplementedError(
-            "LocalGraphify.load is a Phase 0 stub; implementation lands in Phase 1+."
-        )
+        raise NotImplementedError("LocalGraphify.load is a Phase 0 stub; implementation lands in Phase 1+.")

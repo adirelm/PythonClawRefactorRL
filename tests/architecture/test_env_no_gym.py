@@ -40,9 +40,7 @@ def _gym_imports(path: Path) -> list[str]:
                 offenders.append(f"{path}: from {mod} import ...")
         elif isinstance(node, ast.Import):
             for alias in node.names:
-                if alias.name == FORBIDDEN_ROOT or alias.name.startswith(
-                    FORBIDDEN_ROOT + "."
-                ):
+                if alias.name == FORBIDDEN_ROOT or alias.name.startswith(FORBIDDEN_ROOT + "."):
                     offenders.append(f"{path}: import {alias.name}")
     return offenders
 
@@ -62,6 +60,5 @@ def test_no_gymnasium_imports_under_env_or_services(repo_root: Path) -> None:
     for f in py_files:
         offenders.extend(_gym_imports(f))
     assert not offenders, (
-        "gymnasium import found in env/services layer — brief §2.2 forbids it:\n"
-        + "\n".join(offenders)
+        "gymnasium import found in env/services layer — brief §2.2 forbids it:\n" + "\n".join(offenders)
     )

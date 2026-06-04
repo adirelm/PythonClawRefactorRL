@@ -5,6 +5,7 @@ Asserts:
 - Non-overlapping windows (step ≥ window_length)
 - check_convergence raises NotImplementedError until Phase 1+
 """
+
 from pathlib import Path
 
 import pytest
