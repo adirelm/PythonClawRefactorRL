@@ -18,7 +18,7 @@ try:
     import networkx as nx
 
     _DiGraph = nx.DiGraph
-except ImportError:
+except ImportError:  # pragma: no cover  - nx is in pyproject deps; defensive fallback only
     _DiGraph = object  # Phase 0 stub; nx not yet wired
 
 logger = logging.getLogger(__name__)

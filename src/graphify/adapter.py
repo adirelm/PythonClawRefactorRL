@@ -13,7 +13,7 @@ try:
     import networkx as nx
 
     _DiGraph = nx.DiGraph
-except ImportError:
+except ImportError:  # pragma: no cover  - nx is in pyproject deps; defensive fallback only
     _DiGraph = object  # Phase 0 stub; nx not yet wired
 
 
@@ -39,8 +39,8 @@ class GraphifyAdapter(Protocol):
             nx.DiGraph with node attrs {kind, LOC, cyclomatic, layer, lazy_load_flag}
             and edge attrs {rel_type, weight}.
         """
-        ...
+        ...  # pragma: no cover  - Protocol body, never executed
 
     def load(self, pickle_path: Path) -> _DiGraph:
         """Load a previously-built graph from pickle for fast iteration."""
-        ...
+        ...  # pragma: no cover  - Protocol body, never executed
