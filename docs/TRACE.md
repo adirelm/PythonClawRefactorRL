@@ -45,9 +45,10 @@ implements its semantics.
 
 | Brief § | Topic | Covered by |
 |---|---|---|
-| §1.1 | PythonClaw Skills L1/L2/L3 | F15 + N9 (PRD-SKILLS + ADR-011) |
+| §1.1 | PythonClaw Skills L1/L2/L3 | F15 + F18 + N9 (PRD-SKILLS + ADR-005 + ADR-011) |
 | §1.2 | GRAPHIFY G=(V,E) | F1 + F2 + ADR-002 (PRD-GRAPHIFY) |
-| §1.3 | Obsidian Vault | F9 + F10 + ADR-009 |
+| §1.3 | Obsidian Vault | F9 + F10 + F17 + D9 + ADR-009 |
+| CLAUDE.md §4 | Canonical config single-source | F19 |
 
 ---
 
@@ -59,10 +60,11 @@ implements its semantics.
 
 | Brief § | Requirement | Code file | Test file | Chart / artifact | Commit SHA | Status |
 |---|---|---|---|---|---|---|
-| §2.1 | PythonClaw shim isolates legacy surface behind a typed boundary; swap window ≤24h. | `src/pythonclaw_shim/adapter.py` | `tests/unit/test_pythonclaw_shim.py` | `docs/adr/ADR-001-pythonclaw-shim-boundary.md` | `<phase1-commit>` | ✅ done |
-| §2.1 | GRAPHIFY local re-implementation behind `GraphifyAdapter` (`.build()` / `.load()`); no external HTTP at import time. | `src/graphify/adapter.py`, `src/graphify/builder.py`, `src/graphify/local_impl.py` | `tests/unit/test_graphify_adapter.py`, `tests/architecture/test_no_network_at_import.py` | `docs/adr/ADR-002-graphify-adapter.md`, `results/graphs/sample_graph.json`, `results/graphs/skills_graph.json` | `<phase1-commit>` | ✅ done |
+| §2.1 — PRD-SHIM | PythonClaw shim isolates legacy surface behind a typed boundary; swap window ≤24h. | `src/pythonclaw_shim/skill.py`, `src/pythonclaw_shim/registry.py` | `tests/unit/test_pythonclaw_shim.py` | `docs/adr/ADR-001-pythonclaw-shim-boundary.md` | `0165fa2` | ✅ done |
+| §2.1 — **F2** | GRAPHIFY local re-implementation behind `GraphifyAdapter` (`.build()` / `.load()`); no external HTTP at import time. Implementation surface: `src/graphify/local_impl.py` (parser + dependency-edge builder behind the adapter contract, ADR-002). | `src/graphify/adapter.py`, `src/graphify/local_impl.py` | `tests/unit/test_graphify_adapter.py`, `tests/architecture/test_no_network_at_import.py` | `docs/adr/ADR-002-graphify-adapter.md`, `results/graphify_output.gpickle` | `0165fa2` | ✅ done |
 | §2.1 | Cost-metric headline = tiktoken `cl100k_base`; chars/bytes appendix only. | `src/utils/token_cost.py` | `tests/unit/test_token_cost.py` | `results/cost/token_cost_table.csv`, `docs/adr/ADR-003-tiktoken-cost-metric.md` | `58bf82f` | ⬜ planned |
-| §2.1 — lazy-load semantics | Lazy-load broken pytest walks `sys.modules` AND enforces P95 token-cost budget; emits `P_skills = -5.0` penalty on break. | `src/utils/lazy_load_guard.py` | `tests/architecture/test_lazy_load_broken.py` | `docs/adr/ADR-005-lazy-load-broken-semantics.md` | `<phase1-commit>` | ✅ done |
+| §2.1 — lazy-load semantics (**F18** + N9) | Lazy-load broken pytest walks `sys.modules` AND enforces P95 token-cost budget; emits `P_skills = -5.0` penalty on break. Runtime sensor: `src/services/lazy_load_monitor.py` (F18 — ADR-005 invariant monitor; observer-only, no `sys.modules` mutation). | `src/utils/lazy_load_guard.py`, `src/services/lazy_load_monitor.py` | `tests/architecture/test_lazy_load_broken.py` | `docs/adr/ADR-005-lazy-load-broken-semantics.md` | `0165fa2` | ✅ done |
+| §2.1 — **F19** (CLAUDE.md §4) | Canonical config single-source: every algorithm-relevant parameter (α, β, γ, λ, ε, ablation grids, seed lists, feature_dim, entropy threshold, P_skills magnitude) flows through `src/utils/config_loader.py`; no `.py` under `src/` opens `config/config.yaml` directly. | `src/utils/config_loader.py` | `tests/architecture/test_config_single_source.py` | `config/config.yaml`, `CLAUDE.md` §4 | `0165fa2` | ✅ done |
 | §2.1 — SOLID | DI container, single-responsibility services, no god-objects. | `src/sdk/container.py`, `src/services/*.py` | `tests/architecture/test_solid_violations.py` | `docs/diagrams/solid_dep_graph.png` | `<bootstrap-commit>` | ⬜ planned |
 
 ---
@@ -95,7 +97,7 @@ implements its semantics.
 
 | Brief § | Requirement | Code file | Test file | Chart / artifact | Commit SHA | Status |
 |---|---|---|---|---|---|---|
-| §2.1 — F15 | `docs/SKILLS_ARCHITECTURE.md` — L1/L2/L3 theoretical deep-dive with ≥2 concrete usage examples (brief §2.1 Skills mandate). | n/a (prose deliverable) | `tests/architecture/test_skills_architecture_doc.py` | `docs/SKILLS_ARCHITECTURE.md` | `<phase1-commit>` | ✅ done |
+| §2.1 — F15 | `docs/SKILLS_ARCHITECTURE.md` — L1/L2/L3 theoretical deep-dive with ≥2 concrete usage examples (brief §2.1 Skills mandate). | n/a (prose deliverable) | `tests/architecture/test_skills_architecture_doc.py` | `docs/SKILLS_ARCHITECTURE.md` | `0165fa2` | ✅ done |
 | §2.3 — F16 | `tests/test_learning_curve.py` asserts reward-over-training PNG produced AND Δ-Reward numeric is reported. | `scripts/render_learning_curve.py` | `tests/test_learning_curve.py` | `results/learning_curves/reward_vs_episode.png` | `<bootstrap-commit>` | ⬜ planned |
 | §2.3 — D6 | Learning curve `reward_vs_episode.png` — mean ± 95% CI over ≥5 seeds. | `scripts/render_learning_curve.py` | `tests/test_learning_curve.py` | `results/learning_curves/reward_vs_episode.png` | `<bootstrap-commit>` | ⬜ planned |
 | §2.3 — D7 | ΔReward (final − initial mean) reported in `docs/ANALYSIS.md` as mean ± std + 95% CI. | n/a (prose deliverable) | `tests/architecture/test_analysis_delta_reward.py` | `docs/ANALYSIS.md` | `<bootstrap-commit>` | ⬜ planned |
@@ -128,7 +130,7 @@ implements its semantics.
 | Deliv-19 | PRD-GRAPHIFY — graphify product requirements. | n/a | n/a | `docs/prd/PRD-GRAPHIFY.md` | `58bf82f` | ✅ done |
 | Deliv-20 | PRD-SKILLS — skills/reward product requirements. | n/a | n/a | `docs/prd/PRD-SKILLS.md` | `58bf82f` | ✅ done |
 | §3 bug-report | ≥2 architectural bugs documented | docs/BUG_REPORT.md | tests/test_bug_report.py | — | <pending> | ⬜ |
-| §3 before/after | Obsidian Graph View before/after (vault writer + pre-refactor hero shot landed Phase 1; "after" shot pending post-refactor in Phase 2). | `src/obsidian/vault_writer.py`, `scripts/capture_obsidian_stub.py` | `tests/test_screenshots.py` | `results/obsidian/vault/`, `results/obsidian/obsidian_before.png` (✅ Phase 1); `results/obsidian/obsidian_after.png` (⬜ Phase 2) | `<phase1-commit>` | 🟡 before-shot landed; after-shot pending |
+| §3 before/after (**F17** writer + **F10** screenshots + **D9** before-evidence) | Obsidian Vault writer (F17 — `src/services/vault_writer.py`, idempotent vault materialisation, brief §2.1 / §3) plus the pre-refactor hero shot landed Phase 1 (**D9**: `results/figures/obsidian_before.png`). "after" shot (closes F10) pending post-refactor in Phase 2. | `src/services/vault_writer.py`, `scripts/capture_obsidian_stub.py` | `tests/test_screenshots.py`, `tests/unit/test_vault_writer.py` | `results/vault/`, `results/figures/obsidian_before.png` (✅ Phase 1, **D9**); `results/figures/obsidian_after.png` (⬜ Phase 2+, F10) | `0165fa2` | 🟡 before-shot landed (D9 ✅); after-shot pending (F10 partial) |
 
 ---
 
@@ -200,7 +202,7 @@ Phase 0 is **bootstrap-only**. It closes when:
 Sweep performed at Phase 0 ruff-fix; each entry is a planned artifact
 that Phase 1–4 will create. Listed for grader transparency.
 
-- ~~`docs/SKILLS_ARCHITECTURE.md` — F15, Phase 2 will author.~~ ✅ landed in Phase 1 at `<phase1-commit>`.
+- ~~`docs/SKILLS_ARCHITECTURE.md` — F15, Phase 2 will author.~~ ✅ landed in Phase 1 at `0165fa2`.
 - `docs/ANALYSIS.md` — D7, Phase 3 will author.
 - `docs/COST_ANALYSIS.md` — D8, Phase 4 will author.
 - `docs/BUG_REPORT.md` — Phase 4 deliverable.

@@ -1,4 +1,4 @@
-"""Skill dataclass for the PythonClaw shim (ADR-011 + PRD-SKILLS §3/§4).
+"""Skill class for the PythonClaw shim (ADR-011 + PRD-SKILLS §3/§4).
 
 Three-layer object with a hard lazy-load invariant:
 reading ``skill.metadata`` and ``skill.estimated_tokens(layer)`` MUST NOT
@@ -12,7 +12,6 @@ registry decides how a layer materialises, while this module owns the
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass, field
 
 try:
     import tiktoken
@@ -37,17 +36,8 @@ def _count_tokens(payload: object) -> int:
     return max(1, len(text) // 4)
 
 
-@dataclass
 class Skill:
     """Three-layer Skill handle. L1 eager, L2/L3 lazy via loader callbacks."""
-
-    name: str
-    version: str
-    _metadata: dict = field(default_factory=dict)
-    _instructions_loader: Callable[[], dict] | None = None
-    _resources_loader: Callable[[], dict] | None = None
-    _instructions: dict | None = None
-    _resources: dict | None = None
 
     def __init__(
         self,
@@ -62,8 +52,8 @@ class Skill:
         self._metadata = dict(metadata)
         self._instructions_loader = instructions_loader
         self._resources_loader = resources_loader
-        self._instructions = None
-        self._resources = None
+        self._instructions: dict | None = None
+        self._resources: dict | None = None
 
     @property
     def metadata(self) -> dict:
@@ -79,6 +69,25 @@ class Skill:
     def has_resources(self) -> bool:
         """True iff L3 has been materialised."""
         return self._resources is not None
+
+    @property
+    def instructions(self) -> dict:
+        """L2 payload (lazy). First access triggers load_instructions()."""
+        return self.load_instructions()
+
+    @property
+    def resources(self) -> dict:
+        """L3 payload (lazy). First access triggers load_resources()."""
+        return self.load_resources()
+
+    @property
+    def layer(self) -> int:
+        """Current materialised layer: 1 (L1 only) → 2 (+L2) → 3 (+L3)."""
+        if self.has_resources:
+            return _LAYER_L3
+        if self.has_instructions:
+            return _LAYER_L2
+        return _LAYER_L1
 
     def load_instructions(self) -> dict:
         """Force-load L2 (idempotent). Raises if no loader was wired."""

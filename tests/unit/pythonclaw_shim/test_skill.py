@@ -124,3 +124,36 @@ def test_estimated_tokens_fallback_when_no_hint_in_metadata() -> None:
     assert l1 >= 1
     assert l2 == l1 * 10
     assert l3 == l1 * 100
+
+
+def test_instructions_property_lazy_loads() -> None:
+    """Accessing .instructions materialises L2 via the configured loader."""
+    flag = {"l2": False, "l3": False}
+    skill = _make_skill(flag)
+    assert skill.has_instructions is False
+    payload = skill.instructions
+    assert payload == {"prompt": "search"}
+    assert skill.has_instructions is True
+    assert flag["l2"] is True
+    assert flag["l3"] is False
+
+
+def test_resources_property_lazy_loads() -> None:
+    """Accessing .resources materialises L3 via the configured loader."""
+    flag = {"l2": False, "l3": False}
+    skill = _make_skill(flag)
+    assert skill.has_resources is False
+    payload = skill.resources
+    assert payload == {"files": ["a", "b"]}
+    assert skill.has_resources is True
+    assert flag["l3"] is True
+
+
+def test_layer_advances_1_to_2_to_3() -> None:
+    """layer property starts at 1 and advances 1→2→3 as L2/L3 materialise."""
+    skill = _make_skill()
+    assert skill.layer == 1
+    _ = skill.instructions
+    assert skill.layer == 2
+    _ = skill.resources
+    assert skill.layer == 3

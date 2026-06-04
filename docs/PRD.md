@@ -190,6 +190,14 @@ links back to one of these KPIs).
   $-cost if any cloud spend occurred, and the
   forward-runs-remaining-in-envelope number) reported in
   `docs/COST_ANALYSIS.md`.
+- **D9**. Before-state evidence artefact:
+  `results/figures/obsidian_before.png` exists, is non-empty (> 1 KB),
+  and is committed at Phase 1 as the pre-refactor Obsidian Graph View
+  hero shot. The "after" counterpart lands in Phase 2 under D1; D9
+  is the standalone Phase 1 deliverable so the before-state evidence
+  is auditable on its own SHA (closes F10 partially — only the before
+  half — and gives the grader a Phase 1 artefact pointer that does
+  not require waiting on Phase 2).
 
 ---
 
@@ -375,6 +383,54 @@ Each `F#` is traceable to a brief §-id. The trace matrix
   extracted into `docs/ANALYSIS.md`. Closes the gap between O1
   (convergence gate) and the absence of a per-episode reward chart.
 
+### 3.11 Obsidian Vault writer service (brief §2.1 + §3)
+
+- **F17 (Obsidian Vault writer, brief §2.1 / §3)**.
+  `src/services/vault_writer.py` is the single service that materialises
+  the live G = (V, E) into a Markdown-based Obsidian Vault under
+  `results/obsidian_vault/` — one `.md` per node, `[[wikilink]]` edges,
+  deterministic file order. It is the implementation surface F9 (vault
+  shape) and F10 (before/after screenshots) both lean on; isolating it
+  behind its own F-id keeps the writer's contract (idempotent re-writes,
+  no network at write time, ≤150 LOC) auditable independently of the
+  screenshot capture pipeline. **DoD**: a unit test imports
+  `src.services.vault_writer`, calls `write_vault(graph, out_dir)`
+  twice on the same input, and asserts the second call produces a
+  byte-identical directory tree (idempotency); plus the per-node `.md`
+  count equals `|V|`.
+
+### 3.12 Lazy-load invariant monitor (ADR-005)
+
+- **F18 (Lazy-load monitor, ADR-005)**.
+  `src/services/lazy_load_monitor.py` is the runtime sensor that
+  watches `sys.modules` during a `from skills import …` trace and
+  reports whether the L1 → L2 → L3 contract held (L3 `Resources` must
+  not be eagerly loaded when only L1 `Metadata` was requested). It is
+  the implementation surface N9 (lazy-load test) leans on; isolating it
+  behind its own F-id keeps the monitor's contract (observer-only, no
+  mutation of `sys.modules`, deterministic snapshot diff) auditable.
+  **DoD**: `tests/architecture/test_lazy_load_broken.py` imports the
+  monitor, runs it against a synthetic L1-only import, and asserts the
+  monitor reports `lazy_load_broken == False`; a paired test that
+  forces a tier-skip asserts `lazy_load_broken == True` and that the
+  `P_skills = -5.0` penalty (F6) is emitted exactly once.
+
+### 3.13 Canonical config single-source (CLAUDE.md §4)
+
+- **F19 (Canonical config loader, CLAUDE.md §4)**.
+  `src/utils/config_loader.py` is the **single source of truth** for
+  every algorithm-relevant parameter the rest of the codebase reads
+  (α, β, γ, λ, ε, ablation grids, seed lists, feature_dim, entropy
+  threshold, P_skills magnitude). It loads `config/config.yaml` once,
+  caches the parsed dict, and exposes a typed accessor so that body
+  code, tests, and the §5.1 acceptance criteria all read the same
+  number — no drift between the requirement and the assertion that
+  verifies it. **DoD**: a unit test loads the config, mutates the
+  cached dict, re-loads, and asserts the second load returns the
+  original on-disk values (no leaked mutation); plus a static check
+  asserts no `.py` under `src/` reads `config/config.yaml` directly
+  (only via the loader).
+
 ---
 
 ## 4. Non-functional requirements
@@ -443,6 +499,10 @@ Inherited from `CLAUDE.md` Hard Constraints, plus A4-specific additions.
 | F14 | `docs/RESEARCH_ESSAY.md` is 2500–3000 words, 4 H2 sections, ≥ 8 citations, 2 figure references | `tests/test_essay_shape.py::test_word_count_and_structure` |
 | F15 | `docs/SKILLS_ARCHITECTURE.md` contains H2 sections "L1 (Metadata)", "L2 (Instructions)", "L3 (Resources)" plus ≥ 2 concrete usage examples + the L1→L2→L3 contract diagram | `tests/test_skills_architecture_doc.py::test_structure_and_examples` |
 | F16 | `results/learning_curves/reward_vs_episode.png` exists (>1 KB) and `docs/ANALYSIS.md` contains a numeric ΔReward line with mean ± std + 95 % CI across ≥ 5 seeds | `tests/test_learning_curve.py::test_png_and_delta_reward` |
+| F17 | `src/services/vault_writer.write_vault(graph, out_dir)` is idempotent (two consecutive calls produce byte-identical directories) and emits exactly `|V|` `.md` files | `tests/unit/test_vault_writer.py::test_idempotent_and_node_count` |
+| F18 | `src/services/lazy_load_monitor` reports `lazy_load_broken == False` on a synthetic L1-only import and `True` (with one `P_skills = -5.0` penalty event) on a forced tier-skip | `tests/architecture/test_lazy_load_broken.py::test_monitor_truth_table` |
+| F19 | Mutating the cached config dict returned by `src.utils.config_loader.load()` does not leak across a reload; no `.py` under `src/` opens `config/config.yaml` outside the loader (AST scan) | `tests/architecture/test_config_single_source.py::test_loader_is_single_source` |
+| D9  | `results/figures/obsidian_before.png` exists, is non-empty (> 1 KB) at Phase 1 closure | `tests/test_screenshots.py::test_before_hero_shot_exists` |
 
 ### 5.2 Project-level DoD
 
@@ -612,7 +672,7 @@ D-ids the tests verify.
 - §1.3 (Obsidian Markdown + Graph View; introductory) → cross-link to
   F9, F10, L2.
 - §2.1 (Stage 1: clone, static analysis, Obsidian; **requirement**) →
-  F2, F9, F10, F15, L1, ADR-001.
+  F2, F9, F10, F15, F17, F18, F19, D9, L1, ADR-001.
 - §2.2 (Stage 2: graph→RL without Gymnasium; state rep, centrality,
   action space, reward; **requirement**) → F3, F4, F5, F6, F7, F8.
   (F1 state-rep and F7 PPO are referenced from §2.2 because the brief
