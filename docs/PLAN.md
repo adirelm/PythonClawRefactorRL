@@ -16,6 +16,13 @@ build sequence. Mirrors A3's PLAN structure so grader audit transfers.
 
 ## §1 — Architecture (C4-Container, mermaid)
 
+> **Gymnasium ban (brief §2.2).** Brief §2.2 mandates: NO gymnasium
+> import in `src/env/`. Enforced by
+> `tests/architecture/test_env_no_gym.py` (AST-level check, not grep).
+> `SkillsGraphEnv` exposes a custom Python `reset/step` API; any future
+> parallelism uses a custom multiprocess wrapper (or single-process per
+> ADR-007), never `gymnasium.vector.AsyncVectorEnv`.
+
 **Context.** One user (or grader) drives PythonClawRefactorRL; the
 only external system is a local Python codebase snapshot that GRAPHIFY
 ingests. No network, no DB, no inference server, no auth surface.
@@ -34,7 +41,7 @@ C4Container
       Container(nb,    "Analysis Notebook",                 "Jupyter · imports SDK",    "Ablation matrix, PPO+GAE curves, centrality plots, screenshots gallery")
       Container(sdk,   "RefactorSDK (sdk/sdk.py)",          "Python facade",            "SINGLE business-logic entry point — CLAUDE.md §3")
       Container(svc,   "Services",                          "ppo · gae · centrality · evaluation", "PPOService, GAEComputer, CentralityProbe, RolloutCollector, AblationRunner, ConvergenceMonitor")
-      Container(env,   "Environment",                       "SkillsGraphEnv (Gymnasium)", "reset/step over GRAPHIFY graph · 4-action refactor space · variable |V| with padding to max_nodes_v=512")
+      Container(env,   "Environment",                       "SkillsGraphEnv (custom Python API; brief §2.2 bans Gymnasium)", "reset/step over GRAPHIFY graph · 4-action refactor space · variable |V| with padding to max_nodes_v=512")
       Container(model, "Models",                            "torch.nn",                 "GraphSAGE/MLP node encoder · ActorCriticHead (PPO)")
       Container(graph, "GRAPHIFY (local)",                  "networkx · ast",           "Code → skills graph adapter (GraphifyAdapter) · NodeFeaturizer · EdgeBuilder")
       Container(claw,  "pythonclaw shim",                   "stub behind ADR-001",      "24h swap window: thin import-shim emitting NotImplementedError for unbuilt paths; real claw bound later if available")
@@ -78,7 +85,7 @@ Variable-|V| graphs are padded to `max_nodes_v=512` with a boolean mask
 | **data** | `data/repo_snapshot.py`, `data/graph_cache.py`, `data/token_counter.py` | One-time AST walk of the target repo; pickle cache of the induced graph; tiktoken cl100k_base headline + chars/bytes appendix (ADR-003) | No torch, no RL logic |
 | **graphify** | `graphify/adapter.py`, `graphify/featurizer.py`, `graphify/edge_builder.py`, `graphify/lazy_load_probe.py` | Local re-impl of the GRAPHIFY contract behind `GraphifyAdapter` (ADR-002); node features (LOC, fan-in/out, imports, role); edge types (call, import, inherit); `lazy_load_probe` over-approximates §"lazy-load-broken" via dependency-cycle detection (ADR-005) | No env stepping; no model code |
 | **pythonclaw_shim** | `pythonclaw_shim/__init__.py`, `pythonclaw_shim/contract.py` | Thin import-shim that exposes the names a "real" `pythonclaw` would; raises `NotImplementedError` for unbuilt paths so the 24h swap window is a one-PR change (ADR-001) | Any business logic — must remain a façade |
-| **env** | `env/skills_graph_env.py`, `env/reward.py`, `env/action_mask.py`, `env/padding.py` | Gymnasium-style `reset/step` over the skills graph; reward `r = α·ΔModularity + β·ΔCohesion − γ·Coupling + P_skills` (ADR-007); action-masking on inapplicable refactors; fixed-shape obs via padding to `max_nodes_v` (ADR-008) | No model training; no UI; no disk I/O on hot path |
+| **env** | `env/skills_graph_env.py`, `env/reward.py`, `env/action_mask.py`, `env/padding.py` | Custom Python `reset/step` API over the skills graph (brief §2.2 bans Gymnasium); canonical reward `R_t = α·ΔModularity_t + β·ΔCohesion_t − γ·Coupling_Penalty_t + P_skills_t` (ADR-007 §3); action-masking on inapplicable refactors; fixed-shape obs via padding to `max_nodes_v` (ADR-008) | No `gymnasium` import (AST-checked); no model training; no UI; no disk I/O on hot path |
 | **model** | `model/graphsage_encoder.py`, `model/mlp_encoder.py`, `model/actor_critic_head.py` | `nn.Module` definitions only; GraphSAGE encoder is the headline (ADR-004), MLP-on-pooled-features is the ablation baseline; ActorCritic head emits `(logits[4], value)` | No env access; no training loop; no I/O |
 | **services** | `services/ppo_service.py`, `services/gae_computer.py`, `services/rollout_collector.py`, `services/centrality_probe.py`, `services/convergence_monitor.py`, `services/ablation_runner.py`, `services/evaluator.py` | PPO clipped objective (ex04 §2.3, ε=0.2 FIXED); GAE(γ,λ) with λ=0.95 FIXED; centrality probe ≥5 seeds × ≥1 call/seed (ADR-006); dual convergence criterion (rolling-100 reward ±2% × 50 episodes AND entropy<0.5); full α/β/γ + P_skills ablation matrix | No direct user I/O |
 | **sdk** | `sdk/sdk.py`, `sdk/types.py` | Single façade — orchestrates services; the **only** import surface for UIs and the notebook; explicit dataclasses cross the boundary, never raw dicts | No training math inline; no `print()` |
@@ -115,7 +122,7 @@ sequenceDiagram
       POL-->>SDK: (logits[4], V(s_t))
       SDK->>ENV: step(a_t)
       ENV-->>SDK: (s_{t+1}, r_t, done, info)
-      Note over ENV: r_t = α·ΔMod + β·ΔCoh − γ·Coupling + P_skills
+      Note over ENV: R_t = α·ΔModularity_t + β·ΔCohesion_t − γ·Coupling_Penalty_t + P_skills_t (canonical — see ADR-007 §3)
       SDK->>ROL: append(s_t, a_t, r_t, V(s_t), logπ(a_t), done)
     end
     SDK->>GAE: compute_advantages(rollout, γ=0.99, λ=0.95)
@@ -264,9 +271,11 @@ thread-safe — concurrent rollouts would need one env per worker.
 `RolloutCollector` uses fixed-size tensors `[n_steps, ...]`; no replay
 buffer. Checkpoints written atomically (`*.pt.tmp` → rename).
 
-Upgrade path if env-step becomes the bottleneck:
-`gymnasium.vector.AsyncVectorEnv` *behind the SDK boundary* — consumers
-do not change. Recorded as ADR-010 re-open trigger.
+Upgrade path if env-step becomes the bottleneck: a **custom
+multiprocess wrapper** (or single-process per ADR-007) *behind the SDK
+boundary* — consumers do not change. Brief §2.2 bans `gymnasium`, so
+`gymnasium.vector.AsyncVectorEnv` is explicitly NOT on the table.
+Recorded as ADR-010 re-open trigger.
 
 ## §7 — 4-phase roadmap with deliverables per phase
 
@@ -278,19 +287,21 @@ Sequenced phase-milestones; each phase is a single TDD commit
 |---|---|---|---|
 | **0** | **Bootstrap** (already underway) | `pyproject.toml`, `config/config.yaml`, `pythonclaw_shim/` skeleton, ADR-001…009 stubs, ruff + uv green | `test_bootstrap_smoke.py` (import every package), `test_ppo_constants.py` (FIXED constants present) |
 | **1** | **GRAPHIFY adapter + repo ingest** | `GraphifyAdapter.build_graph(repo_path) → nx.DiGraph`; `NodeFeaturizer` (LOC, fan-in/out, role); `EdgeBuilder` (call, import, inherit); `lazy_load_probe` cycle detector; tiktoken token-count headline; graph cache pickle | `test_graphify_adapter.py`, `test_node_features.py`, `test_edge_types.py`, `test_lazy_load_probe.py` (broken-cycle detected), `test_token_count_headline.py` (cl100k_base + chars/bytes appendix) |
-| **2** | **Env + reward + masking + padding** | `SkillsGraphEnv.reset/step` (Gymnasium API); reward eq. `α·ΔMod + β·ΔCoh − γ·Coupling + P_skills`; `ActionMaskService`; padding to `max_nodes_v=512` | `test_env_step_shapes.py`, `test_reward_signs.py` (each term flips reward in the expected direction), `test_action_mask.py` (masked → prob 0 post-softmax), `test_padding_invariance.py` (policy output equals dense path for unmasked nodes) |
+| **2** | **Env + reward + masking + padding** | `SkillsGraphEnv.reset/step` (custom Python API — brief §2.2 bans Gymnasium); canonical reward `R_t = α·ΔModularity_t + β·ΔCohesion_t − γ·Coupling_Penalty_t + P_skills_t` (ADR-007 §3); `ActionMaskService`; padding to `max_nodes_v=512` (ADR-008 fallback — primary path is variable-|V| PyG DataLoader per ADR-004) | `tests/architecture/test_env_no_gym.py` (AST-level — no `gymnasium` import in `src/env/`), `test_env_step_shapes.py`, `test_reward_signs.py` (each term flips reward in the expected direction; `P_skills` is NEGATIVE), `test_action_mask.py` (masked → prob 0 post-softmax), `test_padding_invariance.py` (policy output equals dense path for unmasked nodes) |
 | **3** | **PPO + GAE service + convergence + centrality probe** | `GAEComputer.compute(γ,λ)`; `PPOService.train(seeds)`; `ConvergenceMonitor` (dual criterion); `CentralityProbe` (≥5 seeds, ≤3 calls/seed); `RolloutCollector` | `test_gae_formula.py`, `test_ppo_clip_invariant.py`, `test_advantage_normalization.py`, `test_convergence_dual_criterion.py`, `test_centrality_discipline.py` (call-count cap enforced) |
-| **4** | **SDK facade + CLI + GUI + notebook + ablation matrix + screenshots + §2.4 essay** | `RefactorSDK.{build_graph, train, evaluate, ablate, recommend_refactor}`; `cli/menu.py`; `gui/` Streamlit dashboard; `notebooks/analysis.ipynb`; full α/β/γ + P_skills ablation matrix (≥5 seeds/cell); programmatic NetworkX/pyvis screenshots + Obsidian hero shots; `docs/essay_2_4.md` (2500–3000 words, 4 sections, 8–12 citations, 2 diagrams) | `test_sdk_smoke.py`, `test_cli_menu.py`, `test_gui_foundation.py`, `test_notebook_runs_nbclient.py`, `test_ablation_matrix_complete.py`, `test_screenshots_exist.py` |
+| **4** | **SDK facade + CLI + GUI + notebook + ablation matrix + screenshots + §2.4 essay + skills theory + learning curves + cost envelope** | `RefactorSDK.{build_graph, train, evaluate, ablate, recommend_refactor}`; `cli/menu.py`; `gui/` Streamlit dashboard; `notebooks/analysis.ipynb`; full α/β/γ + P_skills ablation matrix (≥5 seeds/cell); programmatic NetworkX/pyvis screenshots + Obsidian hero shots; `docs/essay_2_4.md` (2500–3000 words, 4 sections, 8–12 citations, 2 diagrams); **F15** `docs/SKILLS_ARCHITECTURE.md` (L1/L2/L3 theoretical deep-dive + ≥2 concrete usage examples, brief §2.1 mandate); **D6** `results/learning_curves/reward_vs_episode.png` (mean ± 95% CI over ≥5 seeds); **D7** ΔReward (final − initial mean ± std + 95% CI) in `docs/ANALYSIS.md`; **D8** cost envelope in `docs/COST_ANALYSIS.md` | `test_sdk_smoke.py`, `test_cli_menu.py`, `test_gui_foundation.py`, `test_notebook_runs_nbclient.py`, `test_ablation_matrix_complete.py`, `test_screenshots_exist.py`, **F16** `tests/test_learning_curve.py` (asserts reward-over-training PNG exists + ΔReward numeric reported) |
 
 **Definition of Done (per phase)** — PRD approved, TDD commit landed,
 ruff zero, ≤150 LOC/file, coverage ≥85%, ADR updated if architecture
 shifted, `docs/shared/PROMPTS.md` records the literal prompt used.
 
-## §8 — ADR registry (10 ADRs)
+## §8 — ADR registry (11 ADRs)
 
 ADRs live in `docs/adr/` and follow *Context → Decision → Consequences*.
-Nine already drafted in bootstrap; ADR-010 closes out the parallel-
-processing decision so §6 is auditable.
+Ten already drafted in bootstrap (ADR-001…010); ADR-011 (SkillsAdapter
+boundary) is added in the Phase-0 fix bundle alongside the ADR-001
+canonical-reward edit. See ADR-007 §3 for the canonical reward equation
+and config keys.
 
 | ADR | Title | Why it matters |
 |---|---|---|
@@ -300,10 +311,11 @@ processing decision so §6 is auditable.
 | **ADR-004** | GraphSAGE vs MLP encoder | GraphSAGE is the headline (uses graph structure); MLP-on-pooled-features is the ablation baseline; lets us isolate the value of message passing. |
 | **ADR-005** | Lazy-load-broken semantics via cycle detection | Honest over-approximation of the §"lazy-load-broken" signal; documented limitation: detects *necessary* but not *sufficient* break conditions. |
 | **ADR-006** | Multi-seed eval discipline (≥5 seeds; centrality ≤3 calls/seed) | Forces statistical honesty (mean ± std + 95% CI) and bounds centrality cost (betweenness is O(VE)). |
-| **ADR-007** | Reward upgrade MUST: `α·ΔMod + β·ΔCoh − γ·Coupling + P_skills` | Pins the reward shape to a defensible refactor-quality decomposition; full α/β/γ + P_skills ablation matrix proves each term matters. |
-| **ADR-008** | SB3 variable-|V| buffer (padding + masking; 2h timebox spike) | SB3's rollout buffer requires fixed obs shape; we pad to `max_nodes_v=512` and carry a boolean mask; spike timebox is 2h before falling back to a hand-rolled buffer. |
+| **ADR-007** | Canonical reward equation (brief §2.2 verbatim): `R_t = α·ΔModularity_t + β·ΔCohesion_t − γ·Coupling_Penalty_t + P_skills_t` with α=1.0, β=1.0, γ=0.5, P_skills=−5.0 | Pins the reward shape to a defensible refactor-quality decomposition; `P_skills` is a NEGATIVE penalty on lazy-load-break (no positive `skills_bonus`); full α/β/γ + P_skills ablation matrix proves each term matters. **See ADR-007 §3 for canonical equation + `config/config.yaml` keys.** |
+| **ADR-008** | Variable-|V| handling: padding to `max_nodes_v=512` is a CONDITIONAL fallback (only if SB3 RolloutBuffer cannot handle Dict obs); primary path is variable-|V| via PyG DataLoader per ADR-004 | Spike-gated; STATE_DESIGN and ADR-008 status reconciled (both "spike-gated"). |
 | **ADR-009** | Screenshot pipeline (programmatic NetworkX/pyvis + Obsidian hero shots) | Deterministic, reproducible screenshots — no manual capture; each figure regenerable from `uv run scripts/render_figures.py`. |
-| **ADR-010** | Single-process training; vector-env upgrade deferred (re-open if env-step >1ms) | Documents §6: reproducibility budget beats throughput at our scale; vector-env upgrade path through SDK boundary so consumers do not change. |
+| **ADR-010** | Single-process training; vector-env upgrade deferred (re-open if env-step >1ms) | Documents §6: reproducibility budget beats throughput at our scale; upgrade path is a **custom multiprocess wrapper** through the SDK boundary (brief §2.2 bans `gymnasium`, so AsyncVectorEnv is off the table). |
+| **ADR-011** | SkillsAdapter boundary (new — added in Phase-0 fix bundle) | Pins the skills-injection seam separate from the `pythonclaw` shim (ADR-001) so L1/L2/L3 skill levels (per F15 `docs/SKILLS_ARCHITECTURE.md`) are swap-in via a stable Protocol; lazy-load-break monitor wires through this boundary. |
 
 ## §9 — OOP layer diagram
 

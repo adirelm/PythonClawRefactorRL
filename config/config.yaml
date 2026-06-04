@@ -23,6 +23,16 @@ reward:
 centrality:
   betweenness_calls_per_seed: 3  # start + end + final-eval; asserted in test_centrality_discipline.py
 
+action:
+  # A_max arithmetic (ACTION_DESIGN §1):
+  # V_max=512, K=8, M=16, E_max=4096, R=8
+  # A_split  = 512 × 8  = 4096
+  # A_merge  = 512 × 16 = 8192
+  # A_rewire = 4096 × 8 = 32768
+  # A_noop   = 1
+  # A_max    = 4096 + 8192 + 32768 + 1 = 45057
+  a_max_total: 45057
+
 seeds: [42, 7, 123, 314, 271]  # ≥5 for statistical claims
 
 training:

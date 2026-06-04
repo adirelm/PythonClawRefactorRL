@@ -4,7 +4,8 @@
 - **Date:** 2026-06-04
 - **Supersedes:** none
 - **Related:** ADR-003 (tiktoken cost metric), ADR-005 (convergence criterion),
-  OQ-4 (statistical-power open question), A3 retrospective
+  OQ-4 (statistical-power open question), A3 retrospective,
+  CLAUDE.md §CANONICAL "Betweenness call discipline" (twice per seed)
 
 ## Context
 
@@ -27,16 +28,18 @@ effect than to find it.
 **Every headline number in A4 reports `mean ± std` and a 95% confidence
 interval, computed over a fixed seed set of size ≥ 5.**
 
-The canonical seed set is:
+The canonical seed set is **five** seeds, frozen and cited verbatim:
 
 ```
-SEEDS = (42, 7, 123, 314, 271)
+SEEDS = (42, 7, 123, 314, 271)   # |SEEDS| = 5 — matches CANONICAL
 ```
 
-These five seeds are frozen in `config/eval.yaml` under `eval.seeds` and
-are the **only** seeds permitted for any number that appears in a chart,
-a table, the §2.4 essay, or the README results section. Exploratory runs
-during development may use any seed; they just cannot be cited.
+These five seeds are frozen in `config/config.yaml#eval.seeds` (single
+source of truth per CLAUDE.md §4 — there is no separate `config/eval.yaml`)
+and are the **only** seeds permitted for any number that appears in a
+chart, a table, the §2.4 essay, or the README results section.
+Exploratory runs during development may use any seed; they just cannot
+be cited.
 
 Concretely, this means:
 
@@ -47,8 +50,15 @@ Concretely, this means:
    (unequal variances) and report the p-value alongside the effect size
    (Cohen's d). Five seeds give us enough degrees of freedom that Welch
    is well-defined; three did not.
-4. **Betweenness centrality** runs once per seed and the reported number
-   is the per-seed mean ± std + 95% CI — never a single-seed snapshot.
+4. **Betweenness centrality** runs **exactly twice per seed** — once on
+   the initial training graph and once on the final training graph
+   (per CLAUDE.md §CANONICAL "Betweenness call discipline" and this
+   ADR's cross-reference rule). The reported number aggregates across
+   the five canonical seeds as `mean ± std + 95% CI` for **both**
+   endpoints **and** their Δ — never a single-seed snapshot, and never
+   more or fewer than 2 calls per seed. The call count itself is
+   enforced by `tests/architecture/test_betweenness_call_count.py`
+   asserting exactly 2 invocations per seed.
 
 ## Consequences
 
@@ -69,8 +79,10 @@ in `results/eval/seed_failures.md`.
 
 ## Enforcement
 
-`tests/architecture/test_seeds_discipline.py` walks every artefact under
-`results/` that ends in `.csv`, `.json`, or `.png.meta.json` and asserts:
+`tests/architecture/test_seeds_discipline.py` enforces this ADR. It
+walks every artefact under `results/` and asserts the following:
+
+**Tabular artefacts** (`.csv`, `.json`, `.png.meta.json`):
 
 - `len(set(rows["seed"])) >= 5` for any charted result.
 - The seed set is a subset of `SEEDS` (no off-canon seeds in headline
@@ -78,8 +90,33 @@ in `results/eval/seed_failures.md`.
 - A `ci_low` and `ci_high` column exists for any row marked
   `is_headline = True`.
 
-The test is part of the `pytest tests/architecture/` quality gate and
-runs in CI on every push.
+**Charted artefacts (concrete assertion pattern).** Any
+`results/figures/*.png` referenced in `docs/EXPERIMENTS.md` or
+`docs/ANALYSIS.md` MUST have an accompanying sidecar
+`results/<chart>_seeded.json` (same stem as the PNG) whose contents
+load into a NumPy array of shape `(seeds, episodes)`, where:
+
+- `arr.ndim == 2`
+- `arr.shape[0] >= 5`   (≥ 5 seeds — matches `|SEEDS|`)
+- the seed labels listed in the sidecar header are a subset of `SEEDS`
+
+The test discovers PNG references by parsing the two markdown files for
+`results/figures/*.png` link targets, then for each target asserts the
+sidecar exists at the matching `_seeded.json` path and that
+`np.asarray(json.load(...)["data"]).shape[0] >= 5`. A PNG that has no
+sidecar — or whose sidecar has < 5 seeds — fails the suite with a
+diagnostic naming the offending chart. This closes the loophole where
+a chart could be cited in the essay without a backing per-seed array.
+
+**Betweenness call discipline (cross-ref).**
+`tests/architecture/test_betweenness_call_count.py` asserts the
+twice-per-seed rule from CLAUDE.md §CANONICAL — exactly 2 NetworkX
+betweenness invocations per seed (initial + final graph). Both this
+test and `test_seeds_discipline.py` MUST pass for the multi-seed
+discipline to be considered enforced end-to-end.
+
+The tests are part of the `pytest tests/architecture/` quality gate and
+run in CI on every push.
 
 ## Alternatives considered
 

@@ -1,18 +1,21 @@
 # PRD-GRAPHIFY — Static-Analysis-to-Graph Engine (Local Re-Implementation)
 
 **Status:** Draft v0.1 · **Owner:** A4 Working Group · **Scope:** ADR-002 boundary
-**Parent:** `docs/prd/PRD-MASTER.md` §3 F6 (GRAPHIFY adapter)
+**Parent:** `docs/PRD.md` §3.1 F2 (GRAPHIFY adapter, brief §1.2)
 
 ## 1. Purpose
 
 The course brief §1.2 specifies that the refactor target must be modelled as
 a **directed weighted graph G = (V, E)** extracted from source code, where
 nodes carry structural metadata and edges carry dependency-relation types.
-GRAPHIFY is the component that produces that graph. The upstream tool of the
-same name is not yet published, so A4 ships a **local re-implementation**
-behind `GraphifyAdapter` (ADR-002) so the upstream binary can swap in within
-a 24h window once available, without code change in the RL trainer or
-reward shaper.
+GRAPHIFY is the component that produces that graph. GRAPHIFY is not
+publicly distributed; we re-implement the brief §1.2 G=(V,E) extraction
+locally to (a) own the artifact for grading, (b) make the adapter
+swap-ready when/if the binary becomes available. The local re-impl sits
+behind `GraphifyAdapter` (ADR-002) so an upstream binary can swap in
+within a 24h window without code change in the RL trainer or reward
+shaper. See `instructions/assignment-4/open_questions.md` OQ-2 for the
+swap-readiness discussion.
 
 ## 2. Inputs
 
@@ -84,7 +87,7 @@ side-car `graph.json` for human inspection.
   produce identical SHA-256 of the serialised `gpickle`.
 - **AC-3** On the lazy-load broken fixture (Phase-0 acceptance gate), the
   resulting graph correctly marks the offending import with
-  `lazy_load_flag=True`; the pytest sys.modules walker (PRD-MASTER §4.2)
+  `lazy_load_flag=True`; the pytest sys.modules walker (`docs/PRD.md` §4.2)
   agrees.
 - **AC-4** ruff clean; no file in `src/graphify/` exceeds 150 LOC
   (CLAUDE.md hard rule).
@@ -118,6 +121,6 @@ directly — they go through `GraphifyAdapter`. This is enforced by an
 ## 9. References
 
 - Course brief §1.2 (graph definition)
-- PRD-MASTER §3 F6 (GRAPHIFY requirement row)
+- `docs/PRD.md` §3.1 F2 (GRAPHIFY requirement row)
 - ADR-002 (Adapter boundary rationale)
 - CLAUDE.md §1, §4, §6 (file-size, config, ruff)

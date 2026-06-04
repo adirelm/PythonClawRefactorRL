@@ -70,10 +70,11 @@ screenshots — brief §3), one bug-report deliverable (brief §3
 - A directed, weighted dependency graph G = (V, E) with adjacency
   matrix A ∈ ℝ^{|V|×|V|} and node-feature matrix X ∈ ℝ^{|V|×D} where D
   covers LOC, cyclomatic complexity, in-degree, out-degree, and
-  Degree Centrality (per-step) plus Betweenness Centrality (once per
-  seed × ≥5 seeds, mean ± std + 95 % CI — per locked decision; brief §2.2
-  explicitly flags Betweenness as a CPU bottleneck not to compute every
-  step).
+  Degree Centrality (per-step) plus Betweenness Centrality (**exactly
+  twice per seed** — once at training-start, once at training-end —
+  ≥5 seeds, mean ± std + 95 % CI for both endpoints and Δ; per locked
+  decision; brief §2.2 explicitly flags Betweenness as a CPU bottleneck
+  not to compute every step).
 - A discrete action space {`split_module`, `merge_modules`,
   `rewire_dependency`} (brief §2.2) — exact arity is up to the
   architect; we ship 3 actions with per-action parameter binding via a
@@ -130,8 +131,14 @@ links back to one of these KPIs).
 - **O1**. Train PPO + GAE to convergence under the dual criterion
   (locked decision): rolling-100-episode mean reward stays within
   ±2 % for 50 consecutive episodes **AND** policy entropy falls below
-  `entropy_threshold` (calibrated per ablation). Both gates must fire,
-  not one.
+  `entropy_threshold = 0.5 nats` (for the K = 3 discrete action set
+  {`split_module`, `merge_modules`, `rewire_dependency`}, the
+  maximum-entropy uniform policy is H_max = ln(3) ≈ 1.0986 nats; the
+  0.5-nat threshold corresponds to ~46 % of max entropy, i.e. the
+  policy has noticeably committed but is not collapsed — see ADR-003
+  for the calibration). Both gates must fire, not one. The threshold
+  lives in `config/config.yaml#training.entropy_threshold` and is the
+  same number `tests/test_convergence_gates.py` reads.
 - **O2**. Final-state modularity (Newman-Girvan modularity Q) **strictly
   greater** than initial-state modularity, mean ± std over ≥ 5 seeds,
   95 % CI excludes zero.
@@ -142,9 +149,10 @@ links back to one of these KPIs).
 - **O5**. The full α / β / γ + `P_skills` ablation matrix runs at ≥ 5
   seeds per cell (locked decision); winning cell's KPI uplift over the
   baseline cell is reported with paired-bootstrap 95 % CI.
-- **O6**. Betweenness Centrality is computed exactly once per seed
-  (locked decision), reported as mean ± std + 95 % CI across ≥ 5 seeds
-  — never per `step()`.
+- **O6**. Betweenness Centrality is computed **exactly twice per seed**
+  (start and end — locked decision; see F3), reported as mean ± std
+  + 95 % CI across ≥ 5 seeds for **both** endpoints **and** their
+  delta Δ — never per `step()`.
 
 ### 2.2 Engineering KPIs
 
@@ -171,6 +179,14 @@ links back to one of these KPIs).
   headline, chars + bytes appendix) reported in `docs/COST_ANALYSIS.md`.
 - **D5**. PPO training wall-clock + CPU-seconds reported alongside the
   token count.
+- **D6**. `results/learning_curves/reward_vs_episode.png` exists and
+  shows mean ± 95 % CI envelope over ≥ 5 seeds (closes F16 evidence).
+- **D7**. ΔReward numeric (= final-mean − initial-mean, with mean ±
+  std + 95 % CI across ≥ 5 seeds) reported in `docs/ANALYSIS.md`.
+- **D8**. Cost envelope (CPU-hours actually spent vs the §F11 budget,
+  $-cost if any cloud spend occurred, and the
+  forward-runs-remaining-in-envelope number) reported in
+  `docs/COST_ANALYSIS.md`.
 
 ---
 
@@ -186,8 +202,11 @@ Each `F#` is traceable to a brief §-id. The trace matrix
   with adjacency matrix A ∈ ℝ^{|V|×|V|} (binary or weighted by edge
   frequency) and a node-feature matrix X ∈ ℝ^{|V|×D} carrying LOC,
   cyclomatic complexity (radon McCabe), in-degree, out-degree, and
-  Degree Centrality. The state representation is the per-step input
-  to the policy network.
+  Degree Centrality. D is bound to `config.state.feature_dim` in
+  `config/config.yaml` (single source of truth); the test asserts
+  `X.shape[1] == config.state.feature_dim` so body and acceptance
+  cannot drift. The state representation is the per-step input to
+  the policy network.
 
 - **F2 (GRAPHIFY adapter, brief §1.2)**. Provide a `GraphifyAdapter`
   interface (ADR-002) backed by a local `src/graphify/` implementation
@@ -196,12 +215,15 @@ Each `F#` is traceable to a brief §-id. The trace matrix
   GRAPHIFY install could swap in later (24 h swap window per locked
   decision).
 
-- **F3 (Centrality metrics, brief §2.2)**. Compute Degree Centrality
-  cheaply on every `step()`; compute Betweenness Centrality **once per
-  seed** (locked decision), aggregate across ≥ 5 seeds as mean ± std
-  + 95 % CI, report at training-end only — never as part of the
+- **F3 (Centrality metrics, brief §2.2 + ADR-006)**. Compute Degree
+  Centrality cheaply on every `step()`; compute Betweenness Centrality
+  **exactly twice per seed** — once at training-start (initial graph)
+  and once at training-end (final graph) — never as part of the
   per-step state vector (brief §2.2 explicit guidance to avoid the
-  CPU bottleneck).
+  CPU bottleneck). Aggregate across ≥ 5 seeds as mean ± std + 95 % CI
+  for **both** endpoints **and** their delta Δ (= end − start).
+  Enforced by `tests/architecture/test_betweenness_call_count.py`
+  asserting exactly 2 calls per seed.
 
 ### 3.2 RL environment (brief §2.2, "no Gymnasium")
 
@@ -219,9 +241,11 @@ Each `F#` is traceable to a brief §-id. The trace matrix
 - **F6 (Reward, brief §2.2 + §2.3 "highly recommended" upgrade +
   "advanced punishment")**.
   Baseline: `R_t = ΔModularity + ΔCohesion − Coupling_Penalty`.
-  Upgraded (shipped): `R_t = α·ΔModularity + β·ΔCohesion − γ·Coupling_Penalty
-  + λ·P_skills_loading_safety`. Coefficients calibrated via the §3.6
-  ablation matrix.
+  Upgraded (shipped, canonical per ADR-007):
+  `R_t = α·ΔModularity_t + β·ΔCohesion_t − γ·Coupling_Penalty_t + P_skills_t`
+  where `P_skills_t` is a NEGATIVE lazy-load-break penalty (no positive
+  `skills_bonus`, no λ coefficient on P_skills). Coefficients calibrated
+  via the §3.6 ablation matrix.
 
 ### 3.3 PPO + GAE trainer (brief §2.3)
 
@@ -254,9 +278,26 @@ Each `F#` is traceable to a brief §-id. The trace matrix
 
 - **F11 (Ablation matrix, locked decision)**. Sweep α ∈ {0.5, 1.0, 2.0},
   β ∈ {0.5, 1.0, 2.0}, γ ∈ {0.5, 1.0, 2.0}, and `P_skills` ∈ {on, off}
-  → 54 cells (locked: 5 seeds per cell, 270 runs total budgeted). The
-  matrix lives in `docs/ABLATION.md` with mean ± std + paired-bootstrap
-  95 % CI per cell. Compute budget capped at the brief §2.4 envelope.
+  → 54 cells. The matrix lives in `docs/ABLATION.md` with mean ± std +
+  paired-bootstrap 95 % CI per cell. Compute budget capped at the brief
+  §2.4 envelope.
+
+  **Per-cell wall-clock estimate.** One PPO seed on the `Skills` module
+  (≤ 60 nodes, 2e5 timesteps) is budgeted at ~6 min CPU. Full sweep at
+  5 seeds × 54 cells = 270 runs × 6 min = **27 CPU-hours** — exceeds
+  the 24 h envelope. Therefore the ablation runs in **coarse-then-fine**
+  staging (locked):
+
+  1. **Scout pass** — 3 seeds × 54 cells = 162 runs × 6 min =
+     ~16 CPU-hours. Ranks cells by mean reward uplift over baseline.
+  2. **Final pass** — 5 seeds × top-3 cells = 15 runs × 6 min =
+     ~1.5 CPU-hours. Reports headline numbers with full
+     mean ± std + 95 % CI.
+
+  Total budget: **~17.5 CPU-hours**, comfortably under 24 h. The
+  staging is documented per-cell in `docs/ABLATION.md`; the 51 cells
+  that receive only scout-pass coverage are explicitly flagged as
+  "3-seed coarse" in their table row.
 
 ### 3.6 Multi-seed evaluation (locked decision, brief §2.4 honest accounting)
 
@@ -285,6 +326,36 @@ Each `F#` is traceable to a brief §-id. The trace matrix
   the connection between GRAPHIFY and AI agents?", "Which tools can
   help automate the analysis?", "When are they appropriate, and what
   are their limitations?"
+
+### 3.9 Skills-architecture theoretical deep-dive (brief §2.1)
+
+- **F15 (Skills architecture deep-dive, brief §2.1)**.
+  `docs/SKILLS_ARCHITECTURE.md` is the standalone theoretical document
+  that closes the brief §2.1 mandate (currently uncovered by F2 / F9
+  / F10, which only handle the parser, vault, and screenshots). It
+  contains:
+  - **L1 (Metadata) deep-dive** — invariants, eager-load contract,
+    public interface, failure modes.
+  - **L2 (Instructions) deep-dive** — invariants, lazy-load contract
+    relative to L1, public interface, failure modes.
+  - **L3 (Resources) deep-dive** — invariants, lazy-load contract
+    relative to L2, public interface, failure modes.
+  - **≥ 2 concrete usage examples** end-to-end (e.g. "load skill X
+    metadata at registry time, defer instructions until invocation,
+    defer resources until execution") with the call graph and the
+    lazy-load events observed in `sys.modules`.
+  - The L1 → L2 → L3 contract diagram that the agent's
+    `P_skills_loading_safety` penalty enforces (cross-link to F6, N9).
+
+### 3.10 Learning-curve evidence (brief §2.3 + locked decision)
+
+- **F16 (Learning curve test, locked decision)**.
+  `tests/test_learning_curve.py` asserts that a training run produces
+  `results/learning_curves/reward_vs_episode.png` (mean ± 95 % CI
+  envelope over ≥ 5 seeds) **and** that a numeric ΔReward
+  (= mean_final − mean_initial, with mean ± std + 95 % CI) is
+  extracted into `docs/ANALYSIS.md`. Closes the gap between O1
+  (convergence gate) and the absence of a per-episode reward chart.
 
 ---
 
@@ -338,20 +409,22 @@ Inherited from `CLAUDE.md` Hard Constraints, plus A4-specific additions.
 
 | Req | Acceptance criterion | Evidence pointer |
 |-----|---------------------|------------------|
-| F1  | `state()` returns `(A, X)` with `A.shape == (|V|, |V|)` and `X.shape == (|V|, D)` where D ≥ 5 | `tests/test_state_repr.py::test_state_shape` |
-| F2  | `GraphifyAdapter.parse(path) -> G` returns a `networkx.DiGraph` with weighted edges; ADR-002 swap window verified by a stub-swap unit test | `tests/test_graphify_adapter.py::test_adapter_contract` |
-| F3  | Degree Centrality computed every step; Betweenness Centrality called exactly once per `train_seed()` call | `tests/test_centrality.py::test_betweenness_call_count` |
+| F1  | `state()` returns `(A, X)` with `A.shape == (|V|, |V|)` and `X.shape == (|V|, D)` where `D == config.state.feature_dim` (bound to `config/config.yaml`, single source of truth — body and acceptance read the same value, no drift); current `feature_dim == 5` covers LOC, cyclomatic, in-degree, out-degree, Degree Centrality | `tests/test_state_repr.py::test_state_shape` |
+| F2  | `GraphifyAdapter.build(src_root, *, seed) -> networkx.DiGraph` (canonical signature per ADR-002) returns a `networkx.DiGraph` with weighted edges and `{kind, LOC, cyclomatic, layer, lazy_load_flag}` node attrs + `{rel_type, weight}` edge attrs; ADR-002 swap window verified by a stub-swap unit test | `tests/test_graphify_adapter.py::test_adapter_contract` |
+| F3  | Degree Centrality computed every step; Betweenness Centrality called **exactly twice** per `train_seed()` call (once at start, once at end); aggregated mean ± std + 95 % CI for both endpoints and Δ across ≥ 5 seeds | `tests/architecture/test_betweenness_call_count.py::test_betweenness_called_twice_per_seed` |
 | F4  | `step(action)` mutates G and returns `(state, reward, done, info)` for all three action types | `tests/test_env_step.py::test_all_actions` |
-| F5  | `RefactorEnv` does not import `gymnasium`; `grep -r "gymnasium" src/env/` returns empty | `tests/test_env_no_gym.py::test_no_gymnasium_import` |
-| F6  | Reward computation matches `α·ΔMod + β·ΔCoh − γ·CouplingPenalty + λ·P_skills` symbolically | `tests/test_reward.py::test_reward_form` |
+| F5  | `RefactorEnv` does not import `gymnasium`; `tests/architecture/test_env_no_gym.py` asserts no `ImportFrom` / `Import` `gymnasium` node anywhere under `src/env/` (AST-level walk, NOT grep — grep false-positives on comments/strings) | `tests/architecture/test_env_no_gym.py::test_no_gymnasium_import_ast` |
+| F6  | Reward computation matches the canonical form (ADR-007) `R_t = α·ΔModularity_t + β·ΔCohesion_t − γ·Coupling_Penalty_t + P_skills_t` symbolically (no λ coefficient on P_skills; P_skills is NEGATIVE) | `tests/test_reward.py::test_reward_form` |
 | F7  | PPO clip ratio bounded in `[1 − ε, 1 + ε]` with ε = 0.2 over a synthetic rollout | `tests/test_ppo.py::test_clip_ratio_bounds` |
 | F8  | GAE advantage matches the closed-form on a 5-step synthetic trajectory | `tests/test_gae.py::test_gae_closed_form` |
 | F9  | `results/obsidian_vault/` contains one `.md` per node and `[[wikilink]]` edges | `tests/test_obsidian_export.py::test_vault_structure` |
 | F10 | `results/screenshots/before.png` and `after.png` exist, non-empty, > 1 KB each | `tests/test_screenshots.py::test_before_after_exist` |
-| F11 | `docs/ABLATION.md` contains 54 cells × 5 seeds = 270 rows, each with mean / std / 95 % CI | `tests/test_ablation_table.py::test_matrix_complete` |
+| F11 | `docs/ABLATION.md` contains 54 cells (scout: 3 seeds × 54 = 162 rows; final: 5 seeds × top-3 = 15 rows; total 177 rows), each with mean / std / 95 % CI; coarse rows flagged "3-seed coarse", final rows flagged "5-seed final"; wall-clock per cell + total CPU-hours reported | `tests/test_ablation_table.py::test_matrix_complete` |
 | F12 | No headline number in `docs/ANALYSIS.md` is single-seed; regex check for "seed=" plus "mean" plus "std" co-occurrence | `tests/test_analysis_seed_audit.py::test_no_single_seed_claims` |
 | F13 | `docs/BUG_REPORT.md` lists ≥ 2 bugs with subgraph evidence and remedy | `tests/test_bug_report.py::test_min_two_bugs` |
 | F14 | `docs/RESEARCH_ESSAY.md` is 2500–3000 words, 4 H2 sections, ≥ 8 citations, 2 figure references | `tests/test_essay_shape.py::test_word_count_and_structure` |
+| F15 | `docs/SKILLS_ARCHITECTURE.md` contains H2 sections "L1 (Metadata)", "L2 (Instructions)", "L3 (Resources)" plus ≥ 2 concrete usage examples + the L1→L2→L3 contract diagram | `tests/test_skills_architecture_doc.py::test_structure_and_examples` |
+| F16 | `results/learning_curves/reward_vs_episode.png` exists (>1 KB) and `docs/ANALYSIS.md` contains a numeric ΔReward line with mean ± std + 95 % CI across ≥ 5 seeds | `tests/test_learning_curve.py::test_png_and_delta_reward` |
 
 ### 5.2 Project-level DoD
 
@@ -383,6 +456,23 @@ Inherited from `CLAUDE.md` Hard Constraints, plus A4-specific additions.
   stand-in) for 24 hours while the real URL is confirmed by the
   lecturer; swap to the real source within the 24-hour window. This is
   a locked decision.
+
+  **Escalation rule (locked).** If the PythonClaw URL is **not**
+  confirmed by **T-72 h before the submission deadline**, the
+  architect accepts the shim as the analysed module of record. In
+  that branch:
+  1. `docs/BUG_REPORT.md` is reframed so every bug is explicitly
+     scoped to "PythonClawShim, the lecturer-pending substitute
+     module" — never to "PythonClaw" unqualified.
+  2. `docs/ANALYSIS.md` adds a top banner naming the shim as the
+     analysed artefact and pointing at this escalation rule.
+  3. The self-grade target (§7) drops from 88–92 to **82–86** to
+     price in the reduced strength of the claim the submission can
+     honestly make about "PythonClaw's architecture" when the
+     artefact analysed is the shim.
+
+  This rule is the contract the submission writes with itself
+  **before** the deadline, not retroactive after.
 - **GRAPHIFY**. Upstream tool is not redistributable; we ship a local
   re-implementation under `src/graphify/` behind `GraphifyAdapter`
   (ADR-002). The adapter contract lets a real GRAPHIFY install swap
@@ -490,21 +580,33 @@ fails the PR if any brief §-id loses coverage.
 
 Brief §-id coverage anchored here:
 
-- §1.1 (PythonClaw `Skills` module — tiered L1/L2/L3 loading) → §1.3
-  scope statement above, F1, F2, F9, N9 (lazy-load test).
+Brief §1.1 / §1.2 / §1.3 are **introductory definitions**, not
+requirements; the requirements live in §2.1 / §2.2 / §2.3 / §2.4 plus
+§3 (deliverables). The mapping below reflects that split — §1.x rows
+are anchored to scope statements, §2.x and §3 rows carry the F-ids and
+D-ids the tests verify.
+
+- §1.1 (PythonClaw `Skills` module — tiered L1/L2/L3 loading;
+  introductory) → §1.3 scope statement above; cross-link to F15 (the
+  deep-dive), N9 (lazy-load test).
 - §1.2 (GRAPHIFY definition: G = (V, E), v ∈ V code entities, e edges
-  as dependencies) → F1, F2, ADR-002.
-- §1.3 (Obsidian Markdown + Graph View) → F9, F10, L2.
-- §2.1 (Stage 1: clone, static analysis, Obsidian) → F2, F9, F10,
-  L1, ADR-001.
-- §2.2 (Stage 2: Dataset, graph→RL without Gymnasium; state rep,
-  centrality, action space, reward) → F1, F3, F4, F5, F6.
+  as dependencies; introductory) → cross-link to F1, F2, ADR-002.
+- §1.3 (Obsidian Markdown + Graph View; introductory) → cross-link to
+  F9, F10, L2.
+- §2.1 (Stage 1: clone, static analysis, Obsidian; **requirement**) →
+  F2, F9, F10, F15, L1, ADR-001.
+- §2.2 (Stage 2: graph→RL without Gymnasium; state rep, centrality,
+  action space, reward; **requirement**) → F3, F4, F5, F6, F7, F8.
+  (F1 state-rep and F7 PPO are referenced from §2.2 because the brief
+  inlines them with the env description; F8 GAE belongs to §2.3 but
+  the brief §2.2 reward discussion forward-references it.)
 - §2.3 (Stage 3: PPO + GAE as reverse-engineering engine; ε = 0.2,
-  λ = 0.95, advanced punishment) → F6, F7, F8.
+  λ = 0.95, advanced punishment; **requirement**) → F6, F7, F8, F16,
+  D6, D7.
 - §2.4 (Stage 4: cost / resource / AI-agent analysis; token count;
-  GRAPHIFY × AI essay) → D4, D5, F14.
+  GRAPHIFY × AI essay; **requirement**) → D4, D5, D8, F11, F12, F14.
 - §3 (Deliverables: before/after Obsidian screenshots, ablation
-  analysis, bug report) → F10, F11, F13, D1, D2.
+  analysis, bug report; **requirement**) → F10, F11, F13, D1, D2, D6.
 
 ---
 
@@ -530,7 +632,7 @@ Brief §-id coverage anchored here:
   (2017). *Proximal Policy Optimization Algorithms.* arXiv:1707.06347.
 - Schulman, J., Moritz, P., Levine, S., Jordan, M., Abbeel, P. (2016).
   *High-Dimensional Continuous Control Using Generalized Advantage
-  Estimation.* ICLR.
+  Estimation.* ICLR 2016, arXiv:1506.02438.
 - Newman, M. E. J., Girvan, M. (2004). *Finding and evaluating
   community structure in networks.* Phys. Rev. E 69, 026113.
 - Henderson, B., Sellers, K. (1996). *Application of Cohesion and
@@ -554,12 +656,18 @@ Brief §-id coverage anchored here:
   advantage, modularity Q, cohesion, coupling, and the
   `P_skills_loading_safety` penalty.
 - `docs/ANALYSIS.md` — multi-seed results (mean ± std + 95 % CI).
-- `docs/ABLATION.md` — 54-cell × 5-seed ablation matrix.
+- `docs/ABLATION.md` — 54-cell ablation matrix in coarse-then-fine
+  staging (3-seed scout across all 54 + 5-seed final on top-3 cells;
+  see F11 for the budget arithmetic).
 - `docs/BUG_REPORT.md` — ≥ 2 architectural bugs the agent surfaced.
 - `docs/RESEARCH_ESSAY.md` — 2500–3000-word GRAPHIFY × AI essay
   (brief §2.4, F14).
 - `docs/COST_ANALYSIS.md` — tiktoken cl100k_base headline + chars /
-  bytes appendix + PPO runtime accounting (D4, D5, brief §2.4).
+  bytes appendix + PPO runtime accounting + cost envelope vs F11
+  budget (D4, D5, D8, brief §2.4).
+- `docs/SKILLS_ARCHITECTURE.md` — L1/L2/L3 theoretical deep-dive +
+  ≥ 2 concrete usage examples + L1→L2→L3 contract diagram (F15,
+  brief §2.1).
 - `docs/TRACE.md` — bidirectional brief §-id ↔ F# ↔ test mapping.
 - `docs/adr/ADR-001-pythonclaw-shim.md` — BOOTSTRAP_NOW path + 24 h
   swap window.

@@ -32,9 +32,11 @@ The architect-decided commitments that frame the whole tracker:
 - **Convergence criterion (dual).** Rolling-100 episode reward stable
   within ±2% **AND** policy entropy below the configured floor for ≥50
   consecutive episodes. Either alone is insufficient.
-- **Ablation matrix.** α (token-saving weight), β (graph-distance
-  weight), γ (skill-coverage weight), and `P_skills` (skill probability
-  vector) are MUST-ablate. Full grid × ≥5 seeds/cell.
+- **Ablation matrix.** α (ΔModularity weight, default 1.0), β
+  (ΔCohesion weight, default 1.0), γ (Coupling-penalty weight, default
+  0.5), and `P_skills` (lazy-load-break penalty, default −5.0) are
+  MUST-ablate. Full grid × ≥5 seeds/cell. Canonical reward equation
+  (brief §2.2): `R_t = α·ΔModularity_t + β·ΔCohesion_t − γ·Coupling_Penalty_t + P_skills_t`.
 - **§2.4 essay.** 2500–3000 words, 4 sections, 8–12 citations, 2
   diagrams. Architect writes the outline + thesis; AI drafts paragraphs
   the architect then edits.
@@ -87,9 +89,9 @@ rather than masking them):
 |---|---|---|---|
 | **0** | **Bootstrap** (repo skeleton, pyproject, uv, ruff, pytest, CI, ≤150-LOC guardrail, docs/ scaffold, ADR-001/002 stubs) | ✅ | `pyproject.toml`, `.github/workflows/ci.yml`, `docs/PRD.md`, `docs/PLAN.md`, `docs/adr/ADR-001-pythonclaw-shim.md`, `docs/adr/ADR-002-graphify-adapter.md`, commit Phase 0 bootstrap |
 | 1 | §2.1 GRAPHIFY + Obsidian (graph builder, adapter, NetworkX + pyvis screenshots, Obsidian hero shots) | ⬜ | `src/graphify/`, `src/adapters/graphify_adapter.py`, `results/graphs/`, `results/obsidian/`, commit Phase 1 |
-| 2 | §2.2 Environment (state/action design, refactor env, reward = α·tokens + β·distance + γ·skill_coverage, masking) | ⬜ | `src/env/refactor_env.py`, `src/env/action_mask.py`, `docs/STATE_DESIGN.md`, `docs/ACTION_DESIGN.md`, commit Phase 2 |
+| 2 | §2.2 Environment (state/action design, refactor env, reward = α·ΔModularity + β·ΔCohesion − γ·Coupling_Penalty + P_skills, masking) | ⬜ | `src/env/refactor_env.py`, `src/env/action_mask.py`, `docs/STATE_DESIGN.md`, `docs/ACTION_DESIGN.md`, commit Phase 2 |
 | 3 | §2.3 PPO + GAE (policy net, GAE advantage, clipped surrogate, SB3 spike + fallback) | ⬜ | `src/training/ppo_trainer.py`, `src/training/gae.py`, `src/policy/policy_net.py`, `docs/adr/ADR-003-sb3-vs-custom.md`, commit Phase 3 |
-| 4 | §2.4 Cost + ablations + essay (tiktoken cost panel, α/β/γ/P_skills ablation matrix ≥5 seeds, 2500–3000 word essay) | ⬜ | `docs/COST_ANALYSIS.md`, `results/ablations/`, `docs/ESSAY.md`, `notebooks/analysis.ipynb`, commit Phase 4 |
+| 4 | §2.4 Cost + ablations + essay (tiktoken cost panel, α/β/γ/P_skills ablation matrix ≥5 seeds, ΔReward summary, 2500–3000 word essay) | ⬜ | `docs/COST_ANALYSIS.md` (D8), `results/ablations/`, `docs/ANALYSIS.md` (D7 ΔReward), `docs/ESSAY.md`, `notebooks/analysis.ipynb`, commit Phase 4 |
 
 Phase gates (all must be green before a phase is marked ✅):
 ruff zero violations · every `.py` ≤150 LOC · coverage ≥85% · uv-only ·
@@ -129,27 +131,34 @@ Obsidian hero shots).
 | T01-07 | Capture Obsidian hero shots (3 screenshots: vault overview, focused subgraph, refactor-target node) | Capturing Obsidian hero shots | 1 | +0 | §2.1-obsidian | `results/obsidian/hero_{1,2,3}.png` exist; each ≥1280×720 |
 | T01-08 | Report betweenness mean ± std + 95% CI across 5 seeds → `results/betweenness_summary.csv` + notebook cell | Reporting betweenness stats (5 seeds) | 1 | +60 | §2.1-stats | `test_betweenness_summary_has_mean_std_ci` |
 | T01-09 | Author `docs/adr/ADR-001-pythonclaw-shim.md` swap test — `test_shim_swap_smoke` that exercises the public surface | Authoring PythonClaw shim swap test | 1 | +60 test | ADR-001 | Test passes against shim today; swap target documented |
-| T01-10 | Add `src/graphify/skills.py` — extract per-file skill vector (test-coverage hint, type-hint density, docstring presence, complexity bin) used by env reward γ term | Adding skill-vector extractor | 1 | +90 | §2.1-skills,§2.2-reward | `test_skill_vector_shape_and_bounds` + values in [0, 1] |
+| T01-10 | Add `src/graphify/skills.py` — extract per-file skill vector (test-coverage hint, type-hint density, docstring presence, complexity bin) used by lazy-load monitor that triggers the `P_skills_t` penalty in the reward (brief §2.2) | Adding skill-vector extractor | 1 | +90 | §2.1-skills,§2.2-reward | `test_skill_vector_shape_and_bounds` + values in [0, 1] |
 | T01-11 | Add `docs/diagrams/graph_overview.svg` — high-level architecture diagram (parser → builder → adapter → env) referenced from PRD + essay | Authoring graph-overview diagram | 1 | +0 | §2.1-diagram | SVG exists; referenced from PRD §Architecture and Essay §Method |
+| T01-12 | Author `docs/SKILLS_ARCHITECTURE.md` (F15) — L1/L2/L3 theoretical deep-dive (skill hierarchy → composition → reuse) with ≥2 concrete usage examples per brief §2.1 mandate | Authoring SKILLS_ARCHITECTURE.md (F15) | 1 | +250 docs | F15,§2.1-skills | File exists; L1/L2/L3 sections present; ≥2 worked examples; cross-referenced from PRD §Skills |
 
 ## §3.2 Phase 2 — §2.2 Environment (⬜ pending)
 
 Goal: define the RL environment that wraps the code graph — state vector,
-action space, reward `r_t = α·Δtokens + β·Δdistance + γ·Δskill_coverage`,
-terminal conditions, and the action-masking service.
+action space, reward `R_t = α·ΔModularity_t + β·ΔCohesion_t − γ·Coupling_Penalty_t + P_skills_t`
+(brief §2.2 verbatim — P_skills is a NEGATIVE penalty applied on lazy-load
+break), terminal conditions, and the action-masking service. No Gymnasium
+import in `src/env/` (brief §2.2 mandate "ללא סביבת Gymnasium").
 
 | id | content | activeForm | phase | LOC-Δ | req | acceptance |
 |----|---------|------------|-------|-------|-----|------------|
 | T02-01 | Author `docs/STATE_DESIGN.md` — justify each state feature (token count, graph diameter, betweenness of refactor target, skill-coverage vector) | Authoring STATE_DESIGN.md | 2 | +120 docs | §2.2-state | Each feature has rationale + rejected-features list |
 | T02-02 | Author `docs/ACTION_DESIGN.md` — discrete action set (extract-function, inline, rename, split-module, merge-module, noop) | Authoring ACTION_DESIGN.md | 2 | +90 docs | §2.2-action | Action space documented; one-hot dim recorded |
 | T02-03 | Implement `src/env/refactor_env.py` — `reset()`, `step(a)`, reward eq, terminal (token-budget exhausted / skill-coverage met / step-limit) | Implementing RefactorEnv | 2 | +140 | §2.2-env | `test_env_reset_returns_state_vector` + `test_step_returns_obs_reward_done_info` |
-| T02-04 | Implement `src/env/reward.py` — `r = α·Δtokens + β·Δdistance + γ·Δskill_coverage` with α/β/γ read from `config/config.yaml` | Implementing reward function | 2 | +80 | §2.2-reward | `test_reward_decomposition_matches_config_weights` |
+| T02-04 | Implement `src/env/reward.py` — canonical `R_t = α·ΔModularity_t + β·ΔCohesion_t − γ·Coupling_Penalty_t + P_skills_t` (brief §2.2) with α=1.0, β=1.0, γ=0.5, P_skills=−5.0 read from `config/config.yaml` | Implementing canonical reward function | 2 | +80 | §2.2-reward | `test_reward_decomposition_matches_config_weights` + `tests/architecture/test_reward_formula.py` asserts exact term structure |
 | T02-05 | Implement `src/env/action_mask.py` — mask illegal refactors (e.g. extract-function on non-function node) via logits → −∞ | Implementing action mask | 2 | +90 | §2.2-mask | `test_masked_logits_yield_zero_probability` |
 | T02-06 | Implement `src/env/tokens.py` — wrap `tiktoken cl100k_base`; expose `count_tokens(text)` + chars/bytes appendix counters | Implementing tiktoken counter | 2 | +70 | §2.2-tokens | `test_tiktoken_cl100k_count_matches_reference` + appendix counters present |
 | T02-07 | Add `tests/test_lazy_load.py` — walk `sys.modules` after `import src`, assert no heavy deps loaded (torch, sb3) before first call; assert P95 import-token cost under threshold | Adding lazy-load + token P95 test | 2 | +90 test | §2.2-lazy | Test passes; threshold in `config/config.yaml` |
 | T02-08 | Implement `src/env/episode_logger.py` — log per-step (s, a, r, mask, tokens) JSONL for replay/debug | Implementing episode logger | 2 | +80 | §2.2-log | `test_episode_logger_emits_jsonl_per_step` |
 | T02-09 | Implement `src/utils/seeding.py` — `set_global_seed(seed)` seeding `random`, `numpy`, `torch` (CPU+CUDA), `PYTHONHASHSEED`; `cudnn.deterministic=True`, `benchmark=False`; `tests/test_reproducibility.py` asserts two consecutive forward passes are bitwise-equal | Authoring seeding utility + reproducibility test | 2 | +100 + 60 test | §2.2-repro | `test_reproducibility_two_consecutive_forwards` passes; CUDA caveats documented in README |
 | T02-10 | Add `tests/test_env_smoke.py` — full episode rollout with a random policy from `reset()` to `done=True`, asserting reward, mask, and JSONL log all line up | Adding env smoke test | 2 | +70 test | §2.2-env | Random-policy rollout terminates within step-limit and writes a non-empty JSONL log |
+| T02-11 | Add `tests/architecture/test_env_no_gym.py` — AST-level walk of `src/env/` asserting **no** `import gymnasium` (brief §2.2 "ללא סביבת Gymnasium") — grep is insufficient because it misses aliased imports | Adding no-gym architecture test | 2 | +60 test | §2.2-no-gym | Test fails if any `src/env/**/*.py` AST contains `Import(name='gymnasium')` or `ImportFrom(module='gymnasium')` |
+| T02-12 | Add `tests/architecture/test_reward_formula.py` — parse `src/env/reward.py` AST + assert four canonical terms (`ΔModularity`, `ΔCohesion`, `Coupling_Penalty`, `P_skills`) are all present and combined with the right signs (γ subtracted; P_skills added as negative) | Adding reward-formula architecture test | 2 | +80 test | §2.2-reward | Test fails on any stale formulation (Δtokens, Δdistance, Δskill_coverage, ΔReuse, ΔQ_struct, ΔQ_runtime) |
+| T02-13 | Add `tests/architecture/test_betweenness_call_count.py` — patch `networkx.betweenness_centrality` and assert it is invoked **exactly twice per seed** (training-start + training-end) across ≥5 seeds per brief §2.2 + ADR-006 | Adding betweenness-call-count architecture test | 2 | +80 test | §2.2-betweenness,ADR-006 | Test fails if call count per seed ≠ 2 |
+| T02-14 | Add `tests/architecture/test_config_refs.py` — walk docs/ and src/ for any reference to the legacy split-config filenames (state/action/reward `.yaml`); assert all references use `config/config.yaml#<block>` notation (CLAUDE.md §4 single-source-of-truth); the test file itself owns the literal stale strings in its `STALE_REFS` tuple | Adding config-refs architecture test | 2 | +60 test | CLAUDE.md§4 | Test fails on any stale split-config filename |
 
 ## §3.3 Phase 3 — §2.3 PPO + GAE (⬜ pending)
 
@@ -168,7 +177,9 @@ custom padding + masking.
 | T03-07 | Implement `src/sdk.py` — single facade exposing `build_graph()`, `train_ppo()`, `evaluate()`, `get_metrics()`, `save_run()` | Implementing SDK facade | 3 | +140 | §2.3-sdk | `test_sdk_is_single_entry_point` (CLI, notebook import only SDK) |
 | T03-08 | Run PPO end-to-end on a single seed; emit `results/ppo_reward_curve.png` + `results/ppo_entropy_curve.png` | Running first end-to-end PPO seed | 3 | +60 | §2.3-run | Both charts exist; caption cites seed + episode count |
 | T03-09 | Implement `src/cli/menu.py` + `main.py` — terminal entry (`uv run main.py` boots in ≤20 LOC `main.py`); menu lists build-graph / train-ppo / evaluate / ablate / show-cost | Implementing CLI menu | 3 | +130 | §2.3-cli | `uv run main.py` boots; menu lines match the 5 entries above |
-| T03-10 | Author `docs/THEORY.md` — PPO clipped surrogate, GAE-λ derivation, value-loss + entropy bonus, with cross-reference table to `src/training/` modules | Authoring THEORY.md (PPO + GAE) | 3 | +220 docs | §2.3-theory | All 4 equations render in LaTeX; cross-ref table names exact `src/` module per equation |
+| T03-10 | Author `docs/THEORY.md` — PPO clipped surrogate, GAE-λ derivation, value-loss + entropy bonus, with cross-reference table to `src/training/` modules (PPO: Schulman et al. 2017 arXiv:1707.06347; GAE: Schulman et al. 2016 arXiv:1506.02438) | Authoring THEORY.md (PPO + GAE) | 3 | +220 docs | §2.3-theory | All 4 equations render in LaTeX; cross-ref table names exact `src/` module per equation; both arXiv IDs cited |
+| T03-11 | Render `results/learning_curves/reward_vs_episode.png` (D6) — mean ± 95% CI over ≥5 seeds of episode reward across training; caption names seeds, episode count, and rolling window | Rendering learning-curve PNG (D6) | 3 | +90 | D6,§2.3-run | PNG exists; caption includes seed list, episode count, mean ± 95% CI band; aggregated across ≥5 seeds |
+| T03-12 | Author `tests/test_learning_curve.py` (F16) — assert `results/learning_curves/reward_vs_episode.png` exists after a short training run AND assert ΔReward (final − initial mean) is computed and stored numerically (not just plotted) | Authoring learning-curve test (F16) | 3 | +80 test | F16,D6,D7 | Test fails if PNG missing OR if ΔReward numeric not extractable from results artifact |
 
 ## §3.4 Phase 4 — §2.4 Cost + ablations + essay (⬜ pending)
 
@@ -178,11 +189,12 @@ diagrams.
 
 | id | content | activeForm | phase | LOC-Δ | req | acceptance |
 |----|---------|------------|-------|-------|-----|------------|
-| T04-01 | Author `docs/COST_ANALYSIS.md` — tiktoken cl100k headline + chars/bytes appendix, prompts × tokens × $ table, AI-tooling cost section | Authoring COST_ANALYSIS.md | 4 | +160 docs | §2.4-cost | Headline number is tiktoken; appendix has chars + bytes; ≥1 cost table |
+| T04-01 | Author `docs/COST_ANALYSIS.md` (D8) — tiktoken cl100k headline + chars/bytes appendix, prompts × tokens × $ table, AI-tooling cost section, **cost envelope** (architect-decided spend cap with running total vs envelope) | Authoring COST_ANALYSIS.md (D8) | 4 | +180 docs | D8,§2.4-cost | Headline number is tiktoken; appendix has chars + bytes; ≥1 cost table; cost envelope section names cap + actual spend |
 | T04-02 | Build ablation harness `scripts/run_ablations.py` — sweep α ∈ {…}, β ∈ {…}, γ ∈ {…}, P_skills ∈ {…} × 5 seeds/cell | Building ablation harness | 4 | +130 | §2.4-ablate | Harness writes one row per (cell × seed) to `results/ablations/raw.csv` |
 | T04-03 | Run full ablation matrix; aggregate `results/ablations/raw.csv` → `results/ablations/summary.csv` with mean ± std + 95% CI per cell | Running full ablation matrix | 4 | +0 | §2.4-ablate | `summary.csv` has ≥1 row per cell with mean, std, ci_lo, ci_hi |
 | T04-04 | Render ablation charts — heatmap per (α, β) cell, line plot per γ, bar chart per P_skills | Rendering ablation charts | 4 | +110 | §2.4-charts | `results/ablations/heatmap_ab.png`, `line_gamma.png`, `bar_pskills.png` exist |
-| T04-05 | Author `docs/ESSAY.md` — 2500–3000 words, 4 sections (motivation, method, results, limitations), 8–12 citations, 2 diagrams | Authoring §2.4 essay | 4 | +900 docs | §2.4-essay | Word count in [2500, 3000]; ≥8 citations; 2 diagrams referenced |
+| T04-04b | Author `docs/ANALYSIS.md` §ΔReward (D7) — final − initial mean reward as mean ± std + 95% CI across ≥5 seeds; consume `results/learning_curves/reward_vs_episode.png` (D6) and the per-seed reward arrays; cross-link to ESSAY §Results | Authoring ΔReward section (D7) | 4 | +120 docs | D7,§2.4-essay | ANALYSIS.md exists with ΔReward block; numeric value reported with mean ± std + 95% CI; ≥5 seeds |
+| T04-05 | Author `docs/ESSAY.md` — 2500–3000 words, 4 sections (motivation, method, results, limitations), 8–12 citations, 2 diagrams; Results section cites D6 learning curve + D7 ΔReward | Authoring §2.4 essay | 4 | +900 docs | §2.4-essay | Word count in [2500, 3000]; ≥8 citations; 2 diagrams referenced; D6 + D7 cross-linked |
 | T04-06 | Author `notebooks/analysis.ipynb` §Cost + §Ablations + §Essay-summary — consumes SDK only | Authoring notebook §Cost/Ablations | 4 | +200 nb | §2.4-nb | Notebook imports SDK only (no parallel impl); LaTeX blocks precede plots |
 | T04-07 | Author `docs/shared/PROMPTS.md` — verbatim prompts used (architect → implementer trail per §1.4) with human-judgment annotations | Authoring PROMPTS.md | 4 | +200 docs | §1.4 | Every prompt mapped to a commit hash; decisions annotated |
 | T04-08 | Run final gate sweep — ruff clean, all `.py` ≤150 LOC, coverage ≥85%, notebook executes top-to-bottom, no PII matches | Running final gate sweep | 4 | 0 | (gates) | `make check` (or scripted equivalent) exits 0; `grep -E "REDACTED-NAME\|REDACTED-HANDLE\|REDACTED\|REDACTED-ID\|GoogleDrive-REDACTED-HANDLE"` returns zero matches |
@@ -204,7 +216,30 @@ below is satisfied.
 | SDK is single business-logic entry | `test_sdk_is_single_entry_point` (T03-07); CLI + notebook import only SDK | 3 |
 | Notebook is a consumer, not a parallel impl | `grep -E "^class \|^def " notebooks/analysis.ipynb` returns only thin wrappers | 4 |
 | Betweenness reported with mean ± std + 95% CI across ≥5 seeds | `test_betweenness_summary_has_mean_std_ci` (T01-08) | 1 |
+| Betweenness called exactly twice per seed (start + end) | `tests/architecture/test_betweenness_call_count.py` (T02-13) | 2 |
+| No Gymnasium import anywhere in `src/env/` | `tests/architecture/test_env_no_gym.py` (T02-11) AST check | 2 |
+| Reward formula matches canonical brief §2.2 (`α·ΔModularity + β·ΔCohesion − γ·Coupling_Penalty + P_skills`) | `tests/architecture/test_reward_formula.py` (T02-12) AST check | 2 |
+| Config refs use `config/config.yaml#<block>` (no `state.yaml`/`action.yaml`/`reward.yaml`) | `tests/architecture/test_config_refs.py` (T02-14) | 2 |
 | Convergence asserted via dual criterion | `test_dual_convergence_requires_both_conditions` (T03-06) | 3 |
+| Learning curve PNG (D6) exists + ΔReward (D7) numeric | `tests/test_learning_curve.py` (T03-12) | 3 |
 | Ablation cells have ≥5 seeds and CI | `summary.csv` schema check in T04-03 | 4 |
+| Cost envelope (D8) recorded in `docs/COST_ANALYSIS.md` | T04-01 acceptance check | 4 |
 | No PII matches against deny-list | `grep -E "REDACTED-NAME\|REDACTED-HANDLE\|REDACTED\|REDACTED-ID\|GoogleDrive-REDACTED-HANDLE"` returns zero matches in tree (the literal pattern lives only in this TODO row and in CLAUDE.md) | 0 |
 | Commit subject matches `^(Phase \d+\|Phase 0 bootstrap\|chore: bootstrap)` | git log walk in T04-08 final sweep | 0 |
+
+## §3.6 Phase 0.1 — Review closure (✅ landed)
+
+Status: ✅ landed by this multi-pass review-closure workflow. The pass
+swept master-PRD drift across PRD / TRACE / PLAN / TODO / STATE_DESIGN /
+ACTION_DESIGN and pinned the canonical values (reward equation,
+GraphifyAdapter signature, betweenness call discipline, V_max fallback
+policy, Gymnasium ban, single-config-file invariant, A_max arithmetic,
+Schulman arXiv IDs, brief §-id discipline, new F15/F16/D6/D7/D8
+artefacts). Listed here for traceability — the actual artefact tasks
+live in Phases 1–4 above.
+
+| id | content | activeForm | phase | LOC-Δ | req | acceptance |
+|----|---------|------------|-------|-------|-----|------------|
+| T001-01 | Sweep PRD / TRACE / PLAN / TODO / STATE_DESIGN / ACTION_DESIGN against the master canonical-values block (reward eq, GraphifyAdapter sig, betweenness call count, V_max policy, Gymnasium ban, single-config-file, A_max=45057, Schulman IDs, brief §-id discipline) | Sweeping canonical-values drift | 0.1 | docs-only | (governance) | Every doc cites the canonical reward equation `R_t = α·ΔModularity + β·ΔCohesion − γ·Coupling_Penalty + P_skills`; no stale Δtokens / Δdistance / Δskill_coverage / ΔReuse / ΔQ_struct / ΔQ_runtime references remain |
+| T001-02 | Register new artefact ids F15 (SKILLS_ARCHITECTURE.md), F16 (test_learning_curve.py), D6 (reward_vs_episode.png), D7 (ΔReward in ANALYSIS.md), D8 (COST_ANALYSIS.md cost envelope) into TRACE.md and TODO.md | Registering new F/D ids | 0.1 | docs-only | F15,F16,D6,D7,D8 | All five ids appear in TRACE.md row index AND in TODO.md tasks T01-12, T02-11..14, T03-11, T03-12, T04-01, T04-04b |
+| T001-03 | Reconcile V_max wording — STATE_DESIGN labels V_max as CONDITIONAL (post-ADR-008 spike); ADR-008 status matches ("spike-gated" or "accepted-with-fallback" — pick one and propagate) | Reconciling V_max policy across docs | 0.1 | docs-only | ADR-004,ADR-008 | STATE_DESIGN + ADR-008 use identical status string for V_max |

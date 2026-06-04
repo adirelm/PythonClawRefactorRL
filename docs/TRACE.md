@@ -26,33 +26,72 @@
 
 ---
 
+## Brief §-id discipline (governance)
+
+Brief **§1.1 / §1.2 / §1.3 are INTRODUCTORY DEFINITIONS** (PythonClaw
+context, GRAPHIFY context, cost-metric framing) — they are NOT
+requirement rows in this matrix. All requirement rows below are
+anchored to **§2.1 / §2.2 / §2.3 / §2.4** (the brief's normative
+sections) plus the §3 deliverables checklist. Where a definition from
+§1.x is the natural home for context, it appears in the requirement
+text only — never in the §-id column.
+
+---
+
 ## §1 — Refactor Track (PythonClaw → SOLID + DI)
+
+> Anchored to brief **§2.1 (refactor deliverables)**. §1.1/§1.2/§1.3 of
+> the brief are definitional context for what PythonClaw, GRAPHIFY and
+> the cost metric *are*; the contractual requirements live in §2.1.
 
 | Brief § | Requirement | Code file | Test file | Chart / artifact | Commit SHA | Status |
 |---|---|---|---|---|---|---|
-| §1.1 | PythonClaw shim isolates legacy surface behind a typed boundary; swap window ≤24h. | `src/pythonclaw_shim/adapter.py` | `tests/unit/test_pythonclaw_shim.py` | `docs/adr/ADR-001-pythonclaw-shim-boundary.md` | `<bootstrap-commit>` | ⬜ planned |
-| §1.2 | GRAPHIFY local re-implementation behind `GraphifyAdapter`; no external HTTP at import time. | `src/graphify/adapter.py`, `src/graphify/builder.py` | `tests/unit/test_graphify_adapter.py`, `tests/architecture/test_no_network_at_import.py` | `docs/adr/ADR-002-graphify-adapter.md`, `results/graphs/sample_graph.json` | `<bootstrap-commit>` | ⬜ planned |
-| §1.3 | Cost-metric headline = tiktoken `cl100k_base`; chars/bytes appendix only. | `src/utils/token_cost.py` | `tests/unit/test_token_cost.py` | `results/cost/token_cost_table.csv`, `docs/adr/ADR-003-tiktoken-cost-metric.md` | `<bootstrap-commit>` | ⬜ planned |
-| §1 — lazy-load semantics | Lazy-load broken pytest walks `sys.modules` AND enforces P95 token-cost budget. | `src/utils/lazy_load_guard.py` | `tests/architecture/test_lazy_load_broken.py` | `docs/adr/ADR-005-lazy-load-broken-semantics.md` | `<bootstrap-commit>` | ⬜ planned |
-| §1 — SOLID | DI container, single-responsibility services, no god-objects. | `src/sdk/container.py`, `src/services/*.py` | `tests/architecture/test_solid_violations.py` | `docs/diagrams/solid_dep_graph.png` | `<bootstrap-commit>` | ⬜ planned |
+| §2.1 | PythonClaw shim isolates legacy surface behind a typed boundary; swap window ≤24h. | `src/pythonclaw_shim/adapter.py` | `tests/unit/test_pythonclaw_shim.py` | `docs/adr/ADR-001-pythonclaw-shim-boundary.md` | `58bf82f` | ⬜ planned |
+| §2.1 | GRAPHIFY local re-implementation behind `GraphifyAdapter` (`.build()` / `.load()`); no external HTTP at import time. | `src/graphify/adapter.py`, `src/graphify/builder.py` | `tests/unit/test_graphify_adapter.py`, `tests/architecture/test_no_network_at_import.py` | `docs/adr/ADR-002-graphify-adapter.md`, `results/graphs/sample_graph.json` | `58bf82f` | ⬜ planned |
+| §2.1 | Cost-metric headline = tiktoken `cl100k_base`; chars/bytes appendix only. | `src/utils/token_cost.py` | `tests/unit/test_token_cost.py` | `results/cost/token_cost_table.csv`, `docs/adr/ADR-003-tiktoken-cost-metric.md` | `58bf82f` | ⬜ planned |
+| §2.1 — lazy-load semantics | Lazy-load broken pytest walks `sys.modules` AND enforces P95 token-cost budget; emits `P_skills = -5.0` penalty on break. | `src/utils/lazy_load_guard.py` | `tests/architecture/test_lazy_load_broken.py` | `docs/adr/ADR-005-lazy-load-broken-semantics.md` | `58bf82f` | ⬜ planned |
+| §2.1 — SOLID | DI container, single-responsibility services, no god-objects. | `src/sdk/container.py`, `src/services/*.py` | `tests/architecture/test_solid_violations.py` | `docs/diagrams/solid_dep_graph.png` | `<bootstrap-commit>` | ⬜ planned |
 
 ---
 
 ## §2 — RL Track (PPO + GAE + Active Knowledge Architecture)
 
+> Anchored to brief **§2.2 (environment + reward) and §2.3 (PPO+GAE
+> training loop)** and §2.4 (essay). **NO Gymnasium**: brief §2.2
+> explicitly bans Gymnasium ("ללא סביבת Gymnasium"). The environment
+> implements `step` / `reset` over the refactored graph state via a
+> custom class — there is NO `gymnasium` import in `src/env/`, and no
+> `gymnasium.vector.AsyncVectorEnv` anywhere; an AST-level architecture
+> test pins this. Parallelism uses a custom multiprocess wrapper or
+> single-process per ADR-007's parallel-processing scope note.
+
 | Brief § | Requirement | Code file | Test file | Chart / artifact | Commit SHA | Status |
 |---|---|---|---|---|---|---|
-| §2.1 | Environment exposes Gymnasium-compatible `step`/`reset` over the refactored graph state. | `src/env/graph_env.py` | `tests/unit/test_graph_env_contract.py` | `docs/diagrams/env_state_diagram.png` | `<bootstrap-commit>` | ⬜ planned |
-| §2.2 | PPO + GAE(λ) with proper advantage normalisation; SB3 buffer spike timeboxed 2h, padding/masking fallback gated by ADR-008. | `src/model/ppo_policy.py`, `src/model/gae.py` | `tests/unit/test_gae_math.py`, `tests/integration/test_ppo_one_update.py` | `results/training/ppo_learning_curve.png`, `docs/prd/PRD-PPO.md`, `docs/prd/PRD-GAE.md`, `docs/adr/ADR-008-sb3-variable-v-buffer.md` | `<bootstrap-commit>` | ⬜ planned |
-| §2.3 | Reward shaping with α/β/γ + P\_skills as **MUST**; full ablation matrix ≥5 seeds/cell. | `src/env/reward.py`, `scripts/run_ablation.py` | `tests/unit/test_reward_shape.py`, `tests/integration/test_ablation_matrix.py` | `results/ablation/reward_ablation_heatmap.png`, `results/ablation/seed_table.csv`, `docs/adr/ADR-007-reward-upgrade-MUST.md`, `docs/prd/PRD-SKILLS.md` | `<bootstrap-commit>` | ⬜ planned |
-| §2.4 | 2500–3000 word essay on Active Knowledge Architecture; 4 sections, 8–12 citations, 2 diagrams. | n/a (prose deliverable) | `tests/architecture/test_essay_wordcount.py` | `docs/essay/active_knowledge_architecture.md`, `docs/diagrams/aka_overview.png`, `docs/diagrams/aka_feedback_loop.png` | `<bootstrap-commit>` | ⬜ planned |
-| §2 — convergence | Dual criterion: rolling-100 reward stable ±2% × 50 episodes **AND** entropy < threshold. | `src/services/convergence.py` | `tests/unit/test_convergence_dual_criterion.py` | `results/training/convergence_panel.png` | `<bootstrap-commit>` | ⬜ planned |
-| §2 — betweenness | Betweenness centrality once per seed × ≥5 seeds; mean ± std + 95% CI. | `src/graphify/centrality.py` | `tests/unit/test_betweenness_seed_stability.py` | `results/graphs/betweenness_ci.png`, `results/graphs/betweenness_table.csv` | `<bootstrap-commit>` | ⬜ planned |
-| §2 — encoder | GraphSAGE vs MLP encoder comparison gated by ADR-004. | `src/model/encoders/graphsage.py`, `src/model/encoders/mlp.py` | `tests/unit/test_encoder_parity.py` | `results/training/encoder_compare.png`, `docs/adr/ADR-004-graphsage-vs-mlp-encoder.md` | `<bootstrap-commit>` | ⬜ planned |
+| §2.2 | Custom graph environment exposing `step`/`reset` over the refactored graph state — **NO Gymnasium (brief §2.2 ban)**. | `src/env/graph_env.py` | `tests/unit/test_graph_env_contract.py`, `tests/architecture/test_env_no_gym.py` | `docs/diagrams/env_state_diagram.png` | `<bootstrap-commit>` | ⬜ planned |
+| §2.2 | Reward shaping `R_t = α·ΔModularity_t + β·ΔCohesion_t − γ·Coupling_Penalty_t + P_skills_t` with α=1.0, β=1.0, γ=0.5, **P_skills = −5.0** (lazy-load-break penalty, NEGATIVE); full ablation matrix ≥5 seeds/cell. | `src/env/reward.py`, `scripts/run_ablation.py` | `tests/unit/test_reward_shape.py`, `tests/integration/test_ablation_matrix.py` | `results/ablation/reward_ablation_heatmap.png`, `results/ablation/seed_table.csv`, `docs/adr/ADR-007-reward-upgrade-MUST.md`, `docs/prd/PRD-SKILLS.md` | `<bootstrap-commit>` | ⬜ planned |
+| §2.2 — betweenness | Betweenness centrality computed **exactly twice per seed** (training start + training end), aggregated across ≥5 seeds with mean ± std + 95% CI for both endpoints AND Δ. | `src/graphify/centrality.py` | `tests/unit/test_betweenness_seed_stability.py`, `tests/architecture/test_betweenness_call_count.py` | `results/graphs/betweenness_ci.png`, `results/graphs/betweenness_table.csv`, `docs/adr/ADR-006-multi-seed-eval-discipline.md` | `<bootstrap-commit>` | ⬜ planned |
+| §2.3 | PPO (Schulman 2017, arXiv:1707.06347) + GAE(λ) (Schulman 2016, arXiv:1506.02438) with proper advantage normalisation; SB3 buffer spike timeboxed 2h, padding-to-V_max=512 fallback gated by ADR-008. | `src/model/ppo_policy.py`, `src/model/gae.py` | `tests/unit/test_gae_math.py`, `tests/integration/test_ppo_one_update.py` | `results/training/ppo_learning_curve.png`, `docs/prd/PRD-PPO.md`, `docs/prd/PRD-GAE.md`, `docs/adr/ADR-008-sb3-variable-v-buffer.md` | `<bootstrap-commit>` | ⬜ planned |
+| §2.3 — convergence | Dual criterion: rolling-100 reward stable ±2% × 50 episodes **AND** entropy < threshold. | `src/services/convergence.py` | `tests/unit/test_convergence_dual_criterion.py` | `results/training/convergence_panel.png`, `docs/adr/ADR-010-dual-convergence-criterion.md` | `<bootstrap-commit>` | ⬜ planned |
+| §2.3 — encoder | GraphSAGE (primary, variable-\|V\| via PyG DataLoader) vs MLP (V_max=512 padding fallback) encoder comparison gated by ADR-004 + ADR-008. | `src/model/encoders/graphsage.py`, `src/model/encoders/mlp.py` | `tests/unit/test_encoder_parity.py` | `results/training/encoder_compare.png`, `docs/adr/ADR-004-graphsage-vs-mlp-encoder.md` | `<bootstrap-commit>` | ⬜ planned |
+| §2.4 — essay | 2500–3000 word essay on Active Knowledge Architecture; 4 sections, 8–12 citations, 2 diagrams. | n/a (prose deliverable) | `tests/architecture/test_essay_wordcount.py` | `docs/essay/active_knowledge_architecture.md`, `docs/diagrams/aka_overview.png`, `docs/diagrams/aka_feedback_loop.png` | `<bootstrap-commit>` | ⬜ planned |
+| §2.4 — cost analysis | Cost envelope documented in `docs/COST_ANALYSIS.md` (tiktoken cl100k_base headline + chars/bytes appendix). | n/a (prose + table deliverable) | `tests/architecture/test_cost_envelope.py` | `docs/COST_ANALYSIS.md`, `results/cost/token_cost_table.csv` | `<bootstrap-commit>` | ⬜ planned |
+| §2.4 — GRAPHIFY×AI essay | Reflective essay on how GRAPHIFY interacts with AI-assisted refactoring — feedback loop, failure modes, governance. | n/a (prose deliverable) | `tests/architecture/test_graphify_ai_essay.py` | `docs/essay/graphify_x_ai.md` | `<bootstrap-commit>` | ⬜ planned |
 
 ---
 
-## Deliverables (per ex04 brief checklist)
+## New artifacts (F15/F16 features + D6/D7/D8 deliverables)
+
+| Brief § | Requirement | Code file | Test file | Chart / artifact | Commit SHA | Status |
+|---|---|---|---|---|---|---|
+| §2.1 — F15 | `docs/SKILLS_ARCHITECTURE.md` — L1/L2/L3 theoretical deep-dive with ≥2 concrete usage examples (brief §2.1 Skills mandate). | n/a (prose deliverable) | `tests/architecture/test_skills_architecture_doc.py` | `docs/SKILLS_ARCHITECTURE.md` | `<bootstrap-commit>` | ⬜ planned |
+| §2.3 — F16 | `tests/test_learning_curve.py` asserts reward-over-training PNG produced AND Δ-Reward numeric is reported. | `scripts/render_learning_curve.py` | `tests/test_learning_curve.py` | `results/learning_curves/reward_vs_episode.png` | `<bootstrap-commit>` | ⬜ planned |
+| §2.3 — D6 | Learning curve `reward_vs_episode.png` — mean ± 95% CI over ≥5 seeds. | `scripts/render_learning_curve.py` | `tests/test_learning_curve.py` | `results/learning_curves/reward_vs_episode.png` | `<bootstrap-commit>` | ⬜ planned |
+| §2.3 — D7 | ΔReward (final − initial mean) reported in `docs/ANALYSIS.md` as mean ± std + 95% CI. | n/a (prose deliverable) | `tests/architecture/test_analysis_delta_reward.py` | `docs/ANALYSIS.md` | `<bootstrap-commit>` | ⬜ planned |
+| §2.4 — D8 | Cost envelope detail in `docs/COST_ANALYSIS.md` — tiktoken cl100k_base totals, per-phase breakdown, budget ceiling. | n/a (prose + table deliverable) | `tests/architecture/test_cost_envelope.py` | `docs/COST_ANALYSIS.md` | `<bootstrap-commit>` | ⬜ planned |
+
+---
+
+## Deliverables (per ex04 brief §3 checklist)
 
 | Brief § | Requirement | Code file | Test file | Chart / artifact | Commit SHA | Status |
 |---|---|---|---|---|---|---|
@@ -109,7 +148,7 @@
 - Multi-file rows list the primary file first, then comma-separated peers.
 - "n/a" in the **Code file** column means the row is a prose / config / decision artifact with no executable surface.
 - "n/a" in the **Test file** column means the row is exercised transitively (e.g. ADRs are validated by the architecture tests that pin the decisions they record).
-- A row may appear in **§1** *and* **Deliverables** when an ADR both records a decision (Deliv row) and gates an implementation (§1 row); the SHA must agree across both.
+- A row may appear in **§2.x** *and* **Deliverables** when an ADR both records a decision (Deliv row) and gates an implementation (§2.x row); the SHA must agree across both.
 
 ## Audit checklist (run before declaring a Phase complete)
 
@@ -142,11 +181,31 @@ Phase 0 is **bootstrap-only**. It closes when:
   - the artifact (chart / CSV / JSON) is regenerated from a deterministic seed,
   - the commit SHA is stamped into this file in the same commit.
 
-## Known gaps tracked against this file
+## Known gaps (files referenced above that do not yet exist on disk)
+
+Sweep performed at Phase 0 ruff-fix; each entry is a planned artifact
+that Phase 1–4 will create. Listed for grader transparency.
+
+- `docs/SKILLS_ARCHITECTURE.md` — F15, Phase 2 will author.
+- `docs/ANALYSIS.md` — D7, Phase 3 will author.
+- `docs/COST_ANALYSIS.md` — D8, Phase 4 will author.
+- `docs/essay/active_knowledge_architecture.md` — §2.4 essay, Phase 4.
+- `docs/essay/graphify_x_ai.md` — §2.4 GRAPHIFY×AI essay, Phase 4.
+- `docs/diagrams/env_state_diagram.png` — Phase 2.
+- `docs/diagrams/solid_dep_graph.png` — Phase 1.
+- `docs/diagrams/aka_overview.png` — Phase 4.
+- `docs/diagrams/aka_feedback_loop.png` — Phase 4.
+- `docs/shared/PROMPTS.md` — Phase 4 freeze.
+
+ADR-001..010 (10 files in `docs/adr/`) and PRD-PPO/GAE/GRAPHIFY/SKILLS
+(4 files in `docs/prd/`) **exist on disk** and are committed at
+`58bf82f` — these are the ✅-done Deliv-7..20 rows above.
+
+Process gaps (separate from missing artifacts):
 
 - ADR-010 final scope = dual-criterion convergence definition (locked
   per grade-strategy round); the "TRACE governance" responsibility
-  documented in `Phase 0 closure criteria` below is absorbed into the
+  documented in `Phase 0 closure criteria` above is absorbed into the
   Phase 0 ruff-fix commit and the future `scripts/stamp_trace.py` rather
   than a separate ADR.
 - `tests/architecture/test_trace_freshness.py` is referenced but not yet

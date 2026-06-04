@@ -5,7 +5,7 @@
 - **Deciders:** Architect (human), implementer (AI)
 - **Supersedes:** —
 - **Related:** ADR-001 (PythonClaw shim), ADR-003 (tiktoken cost),
-  ADR-004 (convergence dual criterion), OQ-5
+  ADR-004 (convergence dual criterion), ADR-011 (SkillsAdapter), OQ-5
 
 ## Context
 
@@ -40,14 +40,25 @@ leaves a class of regressions invisible to the reward function.
 
 - **(a) Import-graph leak.** Importing a Skills submodule causes more
   than one transitive import to appear outside the submodule's
-  declared dependency list. Measured by a pytest fixture that
-  snapshots `sys.modules` before and after the import and diffs against
-  the declared deps recorded in `src/skills/_deps.py`.
+  declared dependency list. Enforced by
+  `tests/architecture/test_lazy_load_invariants.py` via the
+  `sys_modules_snapshot` pytest fixture, which captures
+  `frozenset(sys.modules)` pre-import, imports the submodule under
+  test, captures it again post-import, and asserts
+  `(post - pre) <= declared_deps(submodule)` where
+  `declared_deps` is loaded from `src/skills/_deps.py`. Assert pattern:
+  `assert leaked == set(), f"Undeclared transitive imports: {leaked}"`
+  with `leaked = (post - pre) - declared_deps(submodule)`.
 - **(b) Token re-fetch.** The tiktoken `cl100k_base` count of a
-  Skills call exceeds the P95 of the rolling historical baseline
-  (window = last 100 calls, seed-stratified). Excess implies the
-  cached lazy view was invalidated and the full module was re-shipped
-  through the boundary.
+  Skills call exceeds the locked P95 baseline (see *P95 Calculation*
+  below). Excess implies the cached lazy view was invalidated and
+  the full module was re-shipped through the boundary. Enforced at
+  runtime by `src/services/lazy_load_monitor.py`, which logs
+  `(submodule, token_count, timestamp)` for every Skills call and
+  raises `LazyLoadBroken(submodule, token_count, p95)` when
+  `token_count > config.lazy_load.token_p95`. The raised exception
+  is caught by the reward adapter, which converts it into a single
+  `True` on the boolean break signal for that step.
 
 Either condition firing is sufficient. Both firing in the same step
 still counts as a single break (no double-penalty), to keep the reward
@@ -58,9 +69,11 @@ signal stationary.
 - **`src/services/lazy_load_monitor.py`** (≤150 LOC) exposes a single
   `LazyLoadMonitor` class with one public method:
   `is_broken(call_record) -> bool`. The class is constructed with the
-  declared-deps map and the rolling P95 estimator, and is consumed by
-  the reward function through a thin adapter so the RL code never
-  touches `sys.modules` directly.
+  declared-deps map and the locked `config.lazy_load.token_p95` float
+  (see *P95 Calculation*), and is consumed by the reward function
+  through a thin adapter so the RL code never touches `sys.modules`
+  directly. The monitor raises `LazyLoadBroken` on threshold breach;
+  the reward adapter catches that and emits the boolean break signal.
 - **`tests/architecture/test_lazy_load_invariants.py`** owns the
   import-graph fixture. It parametrizes over every Skills submodule,
   snapshots `sys.modules`, imports the submodule, diffs, and asserts
@@ -70,17 +83,48 @@ signal stationary.
 - The monitor emits a **boolean signal** per environment step. The
   reward function reads that boolean and applies `P_skills` exactly
   once per `True`.
+- The monitor depends on the canonical `SkillsAdapter` Protocol
+  defined in ADR-011 — all Skills calls flow through that adapter so
+  the monitor has a single, typed hook point to instrument.
+
+## P95 Calculation
+
+The token-budget threshold is **computed once at Phase 1 and locked
+for the remainder of training**, to keep the reward signal
+stationary across seeds and across the α/β/γ ablation matrix:
+
+- **When.** Phase 1 (post-environment-bootstrap, pre-RL-training).
+- **How.** Run 100 Skills calls against the frozen Phase-0 corpus
+  using the deterministic seed list `seeds=[0..4]` × 20 calls/seed
+  through `SkillsAdapter` (ADR-011). Record the
+  tiktoken `cl100k_base` count for each call.
+- **Aggregate.** `p95 = numpy.percentile(token_counts, 95,
+  interpolation="linear")` over the full 100-call vector.
+- **Lock.** Write the computed value to `config/config.yaml` under
+  `lazy_load.token_p95` as a plain float. From that point on
+  `lazy_load_monitor.py` reads the locked value at construction
+  time; it does NOT recompute or roll the window during RL training.
+- **Reproducibility.** The 100 call records are persisted to
+  `results/baselines/lazy_load_p95_calibration.csv` with columns
+  `(seed, call_idx, submodule, token_count)` so the locked P95 is
+  auditable and regeneratable from source.
 
 ## Penalty Magnitude
 
-`P_skills = -5.0`, set in `config/config.yaml` under
-`rewards.skills_protection_penalty`. The value is intentionally
-large relative to per-step shaping rewards so that a *single* break
-dominates the episode return — lazy loading is a correctness
-invariant, not a soft preference. The exact magnitude is tuned in the
-α/β/γ ablation matrix (≥5 seeds per cell) and reported with the rest
-of the sensitivity grid; the *sign and order of magnitude* are fixed
-by this ADR, the *exact value* is empirical.
+`P_skills = -5.0` (negative), loaded from `config/config.yaml` under
+`rewards.skills_protection_penalty`. The reward function applies it
+as an **additive term** when the lazy-load monitor's boolean fires:
+`R_t += P_skills` (i.e. `R_t -= 5.0`) for that step, exactly once
+per `True`, per the canonical equation in CLAUDE.md
+(`R_t = α·ΔModularity_t + β·ΔCohesion_t − γ·Coupling_Penalty_t + P_skills_t`).
+There is no positive `skills_bonus` counterpart — `P_skills` is a
+pure penalty term. The value is intentionally large relative to
+per-step shaping rewards so that a *single* break dominates the
+episode return — lazy loading is a correctness invariant, not a soft
+preference. The exact magnitude is tuned in the α/β/γ ablation
+matrix (≥5 seeds per cell) and reported with the rest of the
+sensitivity grid; the *sign and order of magnitude* are fixed by
+this ADR, the *exact value* is empirical.
 
 ## Consequences
 
@@ -89,9 +133,11 @@ by this ADR, the *exact value* is empirical.
 - Skills authors must keep `src/skills/_deps.py` honest; the import-
   graph test will catch undeclared transitive imports at CI time, not
   at training time.
-- The P95 baseline is **seed-stratified**: each RL seed maintains its
-  own rolling window so a noisier seed doesn't unfairly trip the
-  token branch for a quieter one.
+- The P95 baseline is **locked once at Phase 1** from a 100-call
+  calibration vector pooled across seeds `[0..4]` (see *P95
+  Calculation*); it is NOT rolled or re-estimated during RL training,
+  which keeps the reward signal stationary across the α/β/γ ablation
+  matrix.
 - The boolean signal is logged alongside cost rows (ADR-003 schema),
   so post-hoc analysis can attribute reward drops to import leaks vs.
   token re-fetches without re-running training.

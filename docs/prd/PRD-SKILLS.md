@@ -1,6 +1,6 @@
 # PRD-SKILLS — PythonClaw Skills Module Shim
 
-> Component PRD for the Skills module. Realises master PRD §3 / F1.
+> Component PRD for the Skills module. Realises `docs/PRD.md` §3 / F1.
 > Status: DRAFT. Author lens: external researcher reading brief §1.1 cold.
 
 ## 1. Purpose
@@ -25,7 +25,7 @@ contract below is load-bearing for the entire reward pipeline.
 
 ## 2. Why a SHIM (not the real thing yet)
 
-Per **OQ-1** (open question, master PRD): the upstream PythonClaw package URL
+Per **OQ-1** (open question, `docs/PRD.md`): the upstream PythonClaw package URL
 on the brief is unverified at submission time — pip resolution returned 404
 on two candidate names, and the brief PDF does not pin a hash. **ADR-001**
 draws the boundary: we depend on a `pythonclaw_shim` package we own, expose
@@ -64,20 +64,32 @@ Notes on the surface:
   attribute access, but the shim controls *when* the read happens.
 - `estimated_tokens(layer)` is the headline metric for §2.4 of the report and
   is read by the RL state featuriser; it must work pre-load.
+- The host-side caller bridge — the `SkillsAdapter` Protocol that exposes
+  this surface to the RL env and featuriser — is owned by **ADR-011**
+  ("SkillsAdapter"), forthcoming and authored alongside the ADR-001 fix.
+  PRD-SKILLS defines *what* the shim guarantees; ADR-011 defines *how*
+  the rest of the system talks to it.
 
 ## 4. Lazy-load semantics (the invariant we ship)
 
 The single behavioural invariant the shim guarantees:
 
-> Given a freshly discovered `skill`, reading `skill.metadata` and
-> `skill.estimated_tokens(2)` MUST NOT cause the L2 or L3 payloads to be
-> imported, decoded, or counted against the live token budget.
+> reading `skill.metadata` and `skill.estimated_tokens(2)` MUST NOT cause
+> L2 or L3 payloads to be imported, decoded, or counted.
+
+(Verbatim canonical invariant — do not paraphrase. Applies to any freshly
+discovered `skill` handle returned by `SkillRegistry.discover()`.)
 
 Practically this means the shim stores L2/L3 as file paths + byte offsets at
 discovery time, and only opens the files inside the property getter. A
 module-level cache memoises after first access (so repeated reads are free).
 
-## 5. Operational test for "broken lazy-loading" (OQ-5)
+## 5. Operational test for "broken lazy-loading" (OQ-5, ADR-005)
+
+The full operational semantics — what counts as "broken", what we measure,
+and how we grade — are owned by **ADR-005** ("Operational Semantics of
+Broken Lazy-Loading"). This section restates the test so the PRD is
+self-contained; ADR-005 is the source of truth for any drift.
 
 Detection is a real test, not a vibe:
 
@@ -130,8 +142,10 @@ When the upstream PythonClaw URL is confirmed:
 ## 8. References
 
 - Brief §1.1 — three-layer Skill model, lazy-load requirement.
-- Master PRD §3 / F1 — Skills module as a required feature of the refactor
+- `docs/PRD.md` §3 / F1 — Skills module as a required feature of the refactor
   target; sets the boundary this PRD fills in.
 - ADR-001 — shim-vs-vendor decision and 24h swap window.
+- ADR-005 — operational semantics of "broken lazy-loading" (owns the §5 test).
+- ADR-011 — `SkillsAdapter` Protocol (forthcoming, paired with ADR-001 fix).
 - OQ-1 — unverified upstream URL.
 - OQ-5 — "broken lazy-loading" detection methodology.

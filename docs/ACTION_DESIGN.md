@@ -2,6 +2,8 @@
 
 **Status:** draft, paired with STATE_DESIGN.md v1.
 **Owner:** human (architect). AI implements against this contract only.
+**Canonical authority:** ADR-007 (reward), ADR-002 (graph build),
+CLAUDE.md §CANONICAL VALUES (single source of truth across docs).
 
 ## 1. Action space overview
 
@@ -15,22 +17,18 @@ softmax. There are **three structural categories** plus a NO-OP:
 3. `rewire(edge_id, new_target)`
 4. `noop()`
 
-Per-state action count varies, hence "parametric": the policy network
-always sees `A_max` logits but only `|L_t|` are valid. `A_max` is
-budgeted at construction time from `V_max` and edge limits:
+`A_max` arithmetic (CLAUDE.md §CANONICAL "A_max arithmetic"):
 
-- `A_split = V_max · K_partitions` where `K_partitions = 8`
-  (pre-baked partition templates: by-class, by-call-cluster,
-  by-data-flow, etc.).
-- `A_merge = V_max · M_candidates` where `M_candidates = 16` (top-M
-  neighbors by adjacency weight, computed per node from `A`).
-- `A_rewire = E_max · R_targets` where `E_max = 4096`, `R_targets = 8`
-  (top-R alternative targets by feature cosine).
-- `A_noop = 1`.
-- `A_max = A_split + A_merge + A_rewire + A_noop = 4096·8 + 512·16 + 512·8 + 1 = 32 769 + …`.
+- `V_max = 512` (ADR-008 fallback cap), `K = 8` split-points,
+  `M = 16` merge-targets, `E_max = 4096` edges, `R = 8` rewire-targets.
+- `A_split  = V_max · K  = 512 · 8  = 4096`
+- `A_merge  = V_max · M  = 512 · 16 = 8192`
+- `A_rewire = E_max · R  = 4096 · 8 = 32768`
+- `A_noop   = 1`
+- `A_max    = 4096 + 8192 + 32768 + 1 = **45057**`
 
-Exact `A_max` is pinned in `config/action.yaml`; the policy head sizes
-its final linear layer from that constant so checkpoints stay
+Exact `A_max` is pinned in `config/config.yaml#action`; the policy head
+sizes its final linear layer from that constant so checkpoints stay
 compatible across runs with identical config.
 
 ## 2. Action semantics
@@ -44,8 +42,8 @@ compatible across runs with identical config.
   replace the original; inbound edges are rerouted to whichever subset
   contains the called symbol; outbound edges are duplicated only when
   both subsets call the target.
-- Legal-mask rule: at most `K_partitions` legal entries per qualifying
-  node; templates whose resulting `|S_A| / |S_B| < 0.1` are masked out
+- Legal-mask rule: at most `K` legal entries per qualifying node;
+  templates whose resulting `|S_A| / |S_B| < 0.1` are masked out
   to prevent degenerate splits.
 
 ### 2.2 `merge_modules(node_a, node_b)`
@@ -62,11 +60,12 @@ compatible across runs with identical config.
 ### 2.3 `rewire(edge_id, new_target)`
 
 - Preconditions: edge exists in `edge_attrs[r]` for some relation `r ∈
-  {calls, imports}` (data-flow / inheritance edges are immutable in v0).
+  {call, import}` (inheritance edges are immutable in v0; data-flow is
+  out of scope).
 - Effect: redirect `(src, old_dst, r)` to `(src, new_target, r)`.
   `new_target` is drawn from the top-`R` candidates by feature cosine
   to `old_dst`, ensuring the rewire is semantically plausible.
-- Legal-mask rule: masked when rewire would create a cycle in `imports`
+- Legal-mask rule: masked when rewire would create a cycle in `import`
   (PythonClaw forbids circular imports as a hard constraint).
 
 ### 2.4 `noop()`
@@ -86,48 +85,51 @@ compatible across runs with identical config.
 - During replay sampling, the stored `legal_mask` is replayed alongside
   the action; PPO importance ratios are clipped only on legal indices.
 
-## 4. Reward sketch
-
-Per-step reward decomposes into three weighted terms plus a skills
-shaping bonus:
+## 4. Reward (canonical — verbatim from ADR-007)
 
 ```
-r_t = α · ΔQ_struct + β · ΔQ_runtime − γ · cost_t + λ · skills_bonus_t
+R_t = α·ΔModularity_t + β·ΔCohesion_t − γ·Coupling_Penalty_t + P_skills_t
 ```
 
-- `ΔQ_struct`: drop in a static-quality scalar (weighted sum of cyclomatic,
-  fan-out, lazy-load violations, betweenness concentration). Computed as
-  `Q_struct(s_{t-1}) − Q_struct(s_t)` so improvements are positive.
-- `ΔQ_runtime`: drop in P95 token count from the lazy-load-broken pytest
-  walk over `sys.modules`. Captured only every `K_runtime` steps to keep
-  the env step cost bounded; intermediate steps use the cached value.
-- `cost_t`: edit cost — a fixed per-action penalty plus a churn term
-  proportional to the number of symbols touched. NO-OP cost is zero by
-  construction so the agent can stall without bleeding reward.
-- `skills_bonus_t`: `+ε · 𝟙[touched_node ∈ P_skills]` — a small positive
-  shaping signal when the agent acts on nodes flagged in the curriculum
-  skill set. ε is held small enough that ablation (λ → 0) recovers a
-  policy within the rolling-100 convergence band (see `config/reward.yaml`).
+Defaults from `config/config.yaml#reward` (frozen per ADR-007):
 
-Weights `(α, β, γ, λ)` are MUST-ablated per the locked decision:
-≥ 5 seeds per cell, full matrix in `results/ablation/`. Defaults
-`α = 1.0, β = 0.5, γ = 0.1, λ = 0.05` are starting points only; final
-values land after Phase 4 sweeps.
+| symbol     | value | role                                                        |
+|------------|-------|-------------------------------------------------------------|
+| α          | 1.0   | ΔModularity weight                                          |
+| β          | 1.0   | ΔCohesion weight                                            |
+| γ          | 0.5   | Coupling penalty weight                                     |
+| P_skills_t | -5.0  | Lazy-load-break PENALTY (NEGATIVE — no positive bonus form) |
+
+- `ΔModularity_t = Q_mod(G_t) − Q_mod(G_{t-1})` — graph-modularity delta
+  (community-structure improvement, positive when modularity rises).
+- `ΔCohesion_t = C(G_t) − C(G_{t-1})` — intra-module cohesion delta.
+- `Coupling_Penalty_t` — cross-module edge weight (subtracted with γ).
+- `P_skills_t` — NEGATIVE scalar applied when the lazy-load monitor
+  (ADR-005) detects a break this step; 0 otherwise. No positive
+  `skills_bonus` term exists.
+
+Stale formulations explicitly forbidden (per ADR-007): `ΔReuse`,
+`ΔQ_struct`, `ΔQ_runtime`, positive `skills_bonus`, `+P_skills`,
+`λ · skills_bonus`. Any of these is a Phase-0 contract violation.
+
+Weights `(α, β, γ, P_skills)` are MUST-ablated per ADR-007's 3×3×3×2
+grid (54 cells × ≥5 seeds in fine pass).
 
 ## 5. Terminal + truncation
 
-- Episode terminates when `Q_struct(s_t) ≤ Q_struct_target` (success) or
-  when `t = T_horizon = 256` (truncation). Truncated episodes still
+- Episode terminates on success criterion (config-pinned) or at
+  `t = T_horizon = 256` (truncation). Truncated episodes still
   bootstrap the value target; success episodes do not.
-- An additional early-terminate fires if `noop` is sampled `N_noop_max =
-  16` consecutive times — this prevents the policy from collecting the
-  entropy bonus by stalling forever.
+- Early-terminate fires if `noop` is sampled `N_noop_max = 16`
+  consecutive times — prevents stalling for entropy credit.
 
 ## 6. Test hooks
 
-- Unit tests assert that every action category round-trips through the
-  env (`apply → undo` restores byte-identical `(A, X, edge_attrs)`).
-- A property test fuzzes `legal_mask` against 1 000 random graphs and
+- Unit tests assert every action category round-trips through the env
+  (`apply → undo` restores byte-identical `(A, X, edge_attrs)`).
+- `tests/architecture/test_reward_formula.py` AST-parses `src/env/reward.py`
+  and asserts the four canonical terms (ΔModularity, ΔCohesion,
+  Coupling_Penalty, P_skills) with correct signs (γ subtracted; P_skills
+  added as a negative term).
+- Property test fuzzes `legal_mask` against 1000 random graphs and
   asserts no masked action ever mutates state when forced through.
-- Reward tests pin the sign of each component on hand-crafted graphs so
-  α/β/γ ablation can never silently flip the reward direction.
