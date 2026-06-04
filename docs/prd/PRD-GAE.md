@@ -1,6 +1,6 @@
 ---
 doc_id: PRD-GAE
-version: 1.0.1
+version: 1.0.2
 status: Draft
 owner: A4 Architect
 linked_to: docs/PRD.md §3.3
@@ -123,6 +123,15 @@ plus the PPO+GAE trainer narrative in §3.3 "PPO + GAE trainer, brief §2.3").
 Any change to λ, γ, the normalization rule, or the terminal-mask formula
 above requires a coordinated edit to `docs/PRD.md §3.3` and a new
 PRD-GAE minor version.
+
+The advantages produced here feed the PPO update whose **convergence
+detection** is specified in **ADR-010** (non-overlapping windows
+A=[t−200:t−100] / B=[t−100:t], step=100; reward criterion
+`|mean(B) − mean(A)| / |mean(A)| ≤ 0.02`; entropy convergence by **slope**
+`|dH/dt| < entropy_slope_threshold`, not an absolute floor). The choice
+of λ=0.95 directly affects the variance of the advantage signal that
+ADR-010's reward-window statistic operates on, so any future change to
+λ here must be reviewed against ADR-010's window size and threshold.
 
 ## 8. References
 

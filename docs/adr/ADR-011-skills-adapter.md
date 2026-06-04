@@ -40,8 +40,12 @@ This ADR defines the missing seam.
 ## 2. Decision — the `SkillsAdapter` Protocol
 
 We define a typing.Protocol that agent code depends on. The Protocol
-exposes a minimal Skill data class, a `SkillRegistry` for enumeration
-and lookup, and lazy-property access for L2/L3.
+exposes a minimal `Skill` data class, a `SkillRegistry` for enumeration
+and lookup (matching the PRD-SKILLS §3 surface verbatim), and
+lazy-property access for L2/L3. The standout behavioural invariant —
+reading `skill.metadata` and `skill.estimated_tokens(2)` MUST NOT
+trigger L2/L3 load (PRD-SKILLS §4) — is what every field below is
+shaped to preserve.
 
 ```python
 # src/skills/adapter.py
@@ -49,51 +53,91 @@ from pathlib import Path
 from typing import Protocol, runtime_checkable
 
 class Skill(Protocol):
-    id: str                 # stable identifier (e.g. "refactor.split-fn")
+    name: str               # stable identifier (e.g. "refactor.split-fn")
+    version: str            # semver string; used in the sort key (PRD-SKILLS A4)
+    metadata: dict          # L1 payload — cheap, always available
     layer: int              # currently loaded depth: 1, 2, or 3
-    estimated_tokens: int   # cl100k_base count for currently loaded layers
 
     @property
-    def instructions(self) -> str: ...   # L2 — lazy
+    def instructions(self) -> str: ...        # L2 — lazy
     @property
-    def resources(self) -> "Resources": ...  # L3 — lazy
+    def resources(self) -> "Resources": ...   # L3 — lazy
+
+    def estimated_tokens(self, layer: int) -> int: ...
+    # cl100k_base count for the requested layer; MUST work pre-load
+    # (layer=1 and layer=2 callable on a freshly discovered handle
+    # without triggering L2/L3 import — PRD-SKILLS §4 invariant).
 
 @runtime_checkable
 class SkillRegistry(Protocol):
-    def load_metadata(self, root: Path) -> list[Skill]: ...     # L1 only
-    def load_instructions(self, skill_id: str) -> str: ...      # L2 on demand
-    def load_resources(self, skill_id: str) -> "Resources": ... # L3 on demand
+    # PRD-SKILLS §3 surface — what agent code (A1, featuriser) imports.
+    def discover(self, path: Path) -> list[Skill]: ...   # L1 only
+    def get(self, name: str) -> Skill: ...               # raises SkillNotFound
     def __len__(self) -> int: ...
+
+    # Lazy-load monitor seam (PRD-SKILLS §5) — explicit load entry
+    # points that bypass the `Skill` properties, so the monitor can
+    # force a layer load without the property side-effect tripping
+    # the very check it is performing.
+    def load_metadata(self, name: str) -> dict: ...      # L1 on demand
+    def load_instructions(self, name: str) -> str: ...   # L2 on demand
+    def load_resources(self, name: str) -> "Resources": ...  # L3 on demand
 
 @runtime_checkable
 class SkillsAdapter(Protocol):
     registry: SkillRegistry
-    def discover(self, root: Path) -> list[Skill]: ...
-    def get(self, skill_id: str) -> Skill: ...
 ```
 
 Key shape decisions:
 
+- **`Skill.name` + `Skill.version`** match PRD-SKILLS §3 verbatim
+  (earlier drafts of this ADR used `id`; that was a paraphrase and
+  diverged from the PRD surface that agent code actually imports).
+  The pair also feeds the `(name, version)` sort key required by
+  PRD-SKILLS A4 for deterministic rollout order.
+- **`Skill.metadata: dict`** is the L1 payload itself, not a flag.
+  PRD-SKILLS §4 names this attribute as the canonical L1 access path
+  (`reading skill.metadata ... MUST NOT cause L2 or L3 payloads to be
+  imported`), so the Protocol exposes it directly. This is the
+  standout behavioural invariant the PRD calls out, and §2 above pins
+  the field shape that makes it testable.
 - **`Skill.layer`** advances `1 → 2 → 3` as the lazy-properties are
   touched. The lazy-load monitor (PRD-SKILLS §5) reads this field to
   decide whether the `P_skills` penalty (see CLAUDE.md "Reward
   equation": `P_skills = -5.0` when the lazy-load monitor detects a
   break) should fire.
-- **`estimated_tokens`** uses `cl100k_base` (the tokenizer pinned by
-  ADR-003) and counts only currently-loaded layers — never the L2/L3
-  payload at discovery time. This is what guarantees the L1 token
-  budget from PRD-SKILLS §5 step 4 can hold.
-- **`load_instructions` / `load_resources`** are explicit registry
-  methods *in addition to* the `Skill` lazy properties. The property
-  form is for ergonomic agent code (`skill.instructions`); the registry
-  form is for the lazy-load monitor, which needs to invoke the L2/L3
-  load without going through the property (otherwise the act of
-  testing would itself trip the monitor it is testing).
+- **`estimated_tokens(layer: int) -> int`** is a **method**, not an
+  attribute — taking the layer index as an argument. This matches
+  PRD-SKILLS §3 (`estimated_tokens(self, layer: int) -> int`) and
+  PRD-SKILLS §4 (which invokes `skill.estimated_tokens(2)` as the
+  canonical pre-load token query). Counts use `cl100k_base` (the
+  tokenizer pinned by ADR-003) and MUST be answerable for L1/L2/L3
+  without forcing the queried layer to load. This is what guarantees
+  the L1 token budget from PRD-SKILLS §5 step 4 can hold.
+- **`SkillRegistry.discover` / `.get` / `__len__`** live on the
+  registry because that is where PRD-SKILLS §3 puts them — agent code
+  (A1) and the state featuriser import them from the registry, not
+  from a separate adapter façade. The `SkillsAdapter` Protocol is the
+  thin wrapper that holds a `registry` field; callers reach the PRD
+  surface via `adapter.registry.discover(...)`.
+- **`load_metadata` / `load_instructions` / `load_resources`** are
+  explicit registry methods *in addition to* the `Skill` lazy
+  properties. The property form is for ergonomic agent code
+  (`skill.instructions`); the registry form is for the lazy-load
+  monitor, which needs to invoke the L2/L3 load without going through
+  the property (otherwise the act of testing would itself trip the
+  monitor it is testing).
 - **`@runtime_checkable`** is set on `SkillsAdapter` and
   `SkillRegistry` so that `isinstance(obj, SkillsAdapter)` works in
   the factory (§3) — useful both for type guards and for the parity
   test (§4) which verifies *both* concrete adapters satisfy the
   Protocol.
+
+> Cross-reference: every field above is the seam side of a contract
+> defined in **PRD-SKILLS §3** (API surface) and **PRD-SKILLS §4** (the
+> standout behavioural invariant: `skill.metadata` and
+> `skill.estimated_tokens(2)` MUST NOT load L2/L3). If PRD-SKILLS §3 or
+> §4 drift, §2 here drifts with them — see §8 Review Trigger.
 
 ## 3. Two Implementations + Factory Swap Mechanism
 
@@ -173,18 +217,19 @@ def test_both_satisfy_protocol(shim, real):
     assert isinstance(real, SkillsAdapter)
 
 def test_enumeration_cardinality_matches(shim, real):
-    assert len(shim.discover(FIXTURE_ROOT)) == len(real.discover(FIXTURE_ROOT))
+    assert len(shim.registry.discover(FIXTURE_ROOT)) == \
+           len(real.registry.discover(FIXTURE_ROOT))
 
 def test_enumeration_order_matches(shim, real):
-    shim_ids = [s.id for s in shim.discover(FIXTURE_ROOT)]
-    real_ids = [s.id for s in real.discover(FIXTURE_ROOT)]
-    assert shim_ids == real_ids   # sorted by (id, version) per PRD-SKILLS A4
+    shim_names = [(s.name, s.version) for s in shim.registry.discover(FIXTURE_ROOT)]
+    real_names = [(s.name, s.version) for s in real.registry.discover(FIXTURE_ROOT)]
+    assert shim_names == real_names   # sorted by (name, version) per PRD-SKILLS A4
 
 def test_metadata_structure_matches(shim, real):
-    for sid in [s.id for s in shim.discover(FIXTURE_ROOT)]:
-        s_meta = vars(shim.get(sid))   # excluding lazy properties
-        r_meta = vars(real.get(sid))
-        assert set(s_meta) == set(r_meta), f"keyset diff for {sid}"
+    for name, _ in [(s.name, s.version) for s in shim.registry.discover(FIXTURE_ROOT)]:
+        s_meta = shim.registry.get(name).metadata   # L1 dict, no lazy property load
+        r_meta = real.registry.get(name).metadata
+        assert set(s_meta) == set(r_meta), f"metadata keyset diff for {name}"
 ```
 
 The parity test runs in CI against the bundled fixture tree. Before the
@@ -243,8 +288,9 @@ swap window needs to verify that the seam is intact.
 |---|---|---|
 | brief §1.1 | three-layer Skill model, lazy-load requirement | `Skill.layer`, lazy properties, monitor hook |
 | brief §2.1 | Skills mandate in deliverables | `SkillsAdapter` is the canonical entry point |
-| PRD-SKILLS §3 | minimal API surface (`Skill`, `SkillRegistry`) | §2 Protocol matches; ergonomic + registry forms |
-| PRD-SKILLS §5 | broken-lazy-load detection method | `registry.load_*` methods are the monitor's seam |
+| PRD-SKILLS §3 | minimal API surface (`Skill`, `SkillRegistry`) | §2 Protocol matches verbatim — `name/version/metadata/instructions/resources/estimated_tokens(layer)` on `Skill`; `discover/get/__len__` on `SkillRegistry` |
+| PRD-SKILLS §4 | standout invariant — `skill.metadata` + `skill.estimated_tokens(2)` MUST NOT load L2/L3 | §2 lazy-property + `estimated_tokens(layer:int)` method shape is what makes the invariant testable |
+| PRD-SKILLS §5 | broken-lazy-load detection method | `registry.load_metadata/load_instructions/load_resources` are the monitor's seam (bypass the `Skill` properties so the test does not trigger the very condition it checks) |
 | ADR-001 §2 | shim boundary delegation | this ADR owns the runtime seam ADR-001 delegates |
 | ADR-001 §6.1 | swap mechanics | §3 factory + §4 parity test are the verifier ADR-001 step 5 cites |
 | ADR-002 | `GraphifyAdapter` orthogonality | §1 boundary diagram; §5 alt B rejection |

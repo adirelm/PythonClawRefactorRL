@@ -87,10 +87,10 @@ rather than masking them):
 
 | # | Phase | Status | Evidence pointer template |
 |---|---|---|---|
-| **0** | **Bootstrap** (repo skeleton, pyproject, uv, ruff, pytest, CI, ≤150-LOC guardrail, docs/ scaffold, ADR-001/002 stubs) | ✅ | `pyproject.toml`, `.github/workflows/ci.yml`, `docs/PRD.md`, `docs/PLAN.md`, `docs/adr/ADR-001-pythonclaw-shim.md`, `docs/adr/ADR-002-graphify-adapter.md`, commit Phase 0 bootstrap |
+| **0** | **Bootstrap** (repo skeleton, pyproject, uv, ruff, pytest, CI, ≤150-LOC guardrail, docs/ scaffold, ADR-001/002 stubs) | ✅ | `pyproject.toml`, `.github/workflows/ci.yml`, `docs/PRD.md`, `docs/PLAN.md`, `docs/adr/ADR-001-pythonclaw-shim-boundary.md`, `docs/adr/ADR-002-graphify-adapter.md`, commit Phase 0 bootstrap |
 | 1 | §2.1 GRAPHIFY + Obsidian (graph builder, adapter, NetworkX + pyvis screenshots, Obsidian hero shots) | ⬜ | `src/graphify/`, `src/adapters/graphify_adapter.py`, `results/graphs/`, `results/obsidian/`, commit Phase 1 |
 | 2 | §2.2 Environment (state/action design, refactor env, reward = α·ΔModularity + β·ΔCohesion − γ·Coupling_Penalty + P_skills, masking) | ⬜ | `src/env/refactor_env.py`, `src/env/action_mask.py`, `docs/STATE_DESIGN.md`, `docs/ACTION_DESIGN.md`, commit Phase 2 |
-| 3 | §2.3 PPO + GAE (policy net, GAE advantage, clipped surrogate, SB3 spike + fallback) | ⬜ | `src/training/ppo_trainer.py`, `src/training/gae.py`, `src/policy/policy_net.py`, `docs/adr/ADR-003-sb3-vs-custom.md`, commit Phase 3 |
+| 3 | §2.3 PPO + GAE (policy net, GAE advantage, clipped surrogate, SB3 spike + fallback) | ⬜ | `src/training/ppo_trainer.py`, `src/training/gae.py`, `src/policy/policy_net.py`, `docs/adr/ADR-008-sb3-variable-v-buffer.md`, commit Phase 3 |
 | 4 | §2.4 Cost + ablations + essay (tiktoken cost panel, α/β/γ/P_skills ablation matrix ≥5 seeds, ΔReward summary, 2500–3000 word essay) | ⬜ | `docs/COST_ANALYSIS.md` (D8), `results/ablations/`, `docs/ANALYSIS.md` (D7 ΔReward), `docs/ESSAY.md`, `notebooks/analysis.ipynb`, commit Phase 4 |
 
 Phase gates (all must be green before a phase is marked ✅):
@@ -109,7 +109,7 @@ Status: ✅ committed by the foundation agent. Listed for traceability.
 | T00-01 | Initialise repo skeleton (`pyproject.toml`, `uv.lock`, ruff config, pytest config, `.gitignore`, `.env-example`, CI workflow) | Initialising repo skeleton | 0 | +200 | TR-bootstrap | `uv run pytest` and `uv run ruff check` both exit 0 on empty suite |
 | T00-02 | Add `tool.coverage` `fail_under=85`, ruff line-length, and ≤150-LOC pre-commit hook script | Adding coverage gate and 150-LOC pre-commit hook | 0 | +40 | (gate) | Hook rejects a deliberately bloated test file in CI dry-run |
 | T00-03 | Scaffold `docs/` (PRD, PLAN, TODO, README, adr/, shared/, prd/, diagrams/, assets/) | Scaffolding docs/ tree | 0 | +0 | (docs) | All 6 top-level docs files exist; `adr/` contains ADR-001 + ADR-002 stubs |
-| T00-04 | Draft `docs/adr/ADR-001-pythonclaw-shim.md` (24h swap window, public-method contract) | Drafting ADR-001 (PythonClaw shim) | 0 | +120 docs | TR-shim | ADR has Context / Decision / Consequences / Swap-plan sections |
+| T00-04 | Draft `docs/adr/ADR-001-pythonclaw-shim-boundary.md` (24h swap window, public-method contract) | Drafting ADR-001 (PythonClaw shim) | 0 | +120 docs | TR-shim | ADR has Context / Decision / Consequences / Swap-plan sections |
 | T00-05 | Draft `docs/adr/ADR-002-graphify-adapter.md` (in-tree re-impl + adapter interface) | Drafting ADR-002 (GRAPHIFY adapter) | 0 | +120 docs | TR-graphify | ADR names adapter interface methods and rollback path |
 | T00-06 | CLAUDE.md inheritance from A1 (≤150 LOC, ruff, pytest ≥85%, uv-only, commit-subject regex, PII deny-list) | Importing CLAUDE.md inheritance | 0 | +0 | (gates) | `grep -E "150\|ruff\|85%\|uv\|Phase " CLAUDE.md` returns ≥6 matches |
 
@@ -130,7 +130,7 @@ Obsidian hero shots).
 | T01-06 | Authoring `scripts/render_pyvis.py` — render interactive HTML via pyvis | Authoring pyvis renderer | 1 | +90 | §2.1-render | `results/graphs/pyvis.html` opens and shows graph |
 | T01-07 | Capture Obsidian hero shots (3 screenshots: vault overview, focused subgraph, refactor-target node) | Capturing Obsidian hero shots | 1 | +0 | §2.1-obsidian | `results/obsidian/hero_{1,2,3}.png` exist; each ≥1280×720 |
 | T01-08 | Report betweenness mean ± std + 95% CI across 5 seeds → `results/betweenness_summary.csv` + notebook cell | Reporting betweenness stats (5 seeds) | 1 | +60 | §2.1-stats | `test_betweenness_summary_has_mean_std_ci` |
-| T01-09 | Author `docs/adr/ADR-001-pythonclaw-shim.md` swap test — `test_shim_swap_smoke` that exercises the public surface | Authoring PythonClaw shim swap test | 1 | +60 test | ADR-001 | Test passes against shim today; swap target documented |
+| T01-09 | Author `docs/adr/ADR-001-pythonclaw-shim-boundary.md` swap test — `test_shim_swap_smoke` that exercises the public surface | Authoring PythonClaw shim swap test | 1 | +60 test | ADR-001 | Test passes against shim today; swap target documented |
 | T01-10 | Add `src/graphify/skills.py` — extract per-file skill vector (test-coverage hint, type-hint density, docstring presence, complexity bin) used by lazy-load monitor that triggers the `P_skills_t` penalty in the reward (brief §2.2) | Adding skill-vector extractor | 1 | +90 | §2.1-skills,§2.2-reward | `test_skill_vector_shape_and_bounds` + values in [0, 1] |
 | T01-11 | Add `docs/diagrams/graph_overview.svg` — high-level architecture diagram (parser → builder → adapter → env) referenced from PRD + essay | Authoring graph-overview diagram | 1 | +0 | §2.1-diagram | SVG exists; referenced from PRD §Architecture and Essay §Method |
 | T01-12 | Author `docs/SKILLS_ARCHITECTURE.md` (F15) — L1/L2/L3 theoretical deep-dive (skill hierarchy → composition → reuse) with ≥2 concrete usage examples per brief §2.1 mandate | Authoring SKILLS_ARCHITECTURE.md (F15) | 1 | +250 docs | F15,§2.1-skills | File exists; L1/L2/L3 sections present; ≥2 worked examples; cross-referenced from PRD §Skills |
@@ -171,7 +171,7 @@ custom padding + masking.
 | T03-01 | Implement `src/policy/policy_net.py` — actor-critic torso, Categorical head over action set, value head V_φ(s) | Implementing actor-critic net | 3 | +130 | §2.3-policy | `test_policy_outputs_logits_and_value` |
 | T03-02 | Implement `src/training/gae.py` — GAE-λ advantage Â_t per Schulman et al. 2016 | Implementing GAE advantage | 3 | +90 | §2.3-gae | `test_gae_matches_hand_computed_example` |
 | T03-03 | Implement `src/training/ppo_loss.py` — clipped surrogate L^CLIP + value loss + entropy bonus | Implementing PPO clipped loss | 3 | +110 | §2.3-loss | `test_ppo_clipped_loss_formula` + `test_entropy_bonus_present` |
-| T03-04 | 2h SB3 spike — wire `stable_baselines3.PPO` on env, evaluate buffer compatibility with action mask | Spiking SB3 for 2h | 3 | +60 | §2.3-spike | `docs/adr/ADR-003-sb3-vs-custom.md` records outcome (chose SB3 / chose fallback) |
+| T03-04 | 2h SB3 spike — wire `stable_baselines3.PPO` on env, evaluate buffer compatibility with action mask | Spiking SB3 for 2h | 3 | +60 | §2.3-spike | `docs/adr/ADR-008-sb3-variable-v-buffer.md` records outcome (chose SB3 / chose fallback) |
 | T03-05 | Implement custom PPO trainer fallback `src/training/ppo_trainer.py` (used if SB3 spike fails) — rollout buffer with padding + mask | Implementing custom PPO trainer | 3 | +140 | §2.3-trainer | `test_ppo_trainer_runs_one_update_cycle` |
 | T03-06 | Implement `src/training/convergence.py` — dual criterion (rolling-100 reward ±2% × 50 episodes AND entropy < floor) | Implementing dual convergence check | 3 | +90 | §2.3-conv | `test_dual_convergence_requires_both_conditions` |
 | T03-07 | Implement `src/sdk.py` — single facade exposing `build_graph()`, `train_ppo()`, `evaluate()`, `get_metrics()`, `save_run()` | Implementing SDK facade | 3 | +140 | §2.3-sdk | `test_sdk_is_single_entry_point` (CLI, notebook import only SDK) |

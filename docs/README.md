@@ -20,7 +20,7 @@ diagrams + decision records.
 | Path | Contents |
 |---|---|
 | [`prd/`](prd/) | Per-section PRD addenda when the top-level PRD grows too long |
-| [`adr/`](adr/) | Architecture Decision Records — ADR-001 PythonClaw shim, ADR-002 GraphifyAdapter, ADR-003 SB3 timebox, etc. |
+| [`adr/`](adr/) | Architecture Decision Records — ADR-001 PythonClaw shim, ADR-002 GraphifyAdapter, ADR-003 tiktoken cost metric, etc. |
 | [`diagrams/`](diagrams/) | Mermaid / draw.io source + exported PNG/SVG |
 | [`shared/`](shared/) | Cross-cutting artefacts (PROMPTS.md — literal prompts used, per §1.4 evidence) |
 | [`assets/`](assets/) | Static images / PDFs referenced from shipped docs (all other PDFs are gitignored) |

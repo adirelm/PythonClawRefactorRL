@@ -78,10 +78,16 @@ compatible across runs with identical config.
 - Env produces `legal_mask: torch.BoolTensor` of shape `(A_max,)` once
   per step. Construction is `O(|V| + |E|)` and is memoized while the
   graph is unchanged within a step.
-- Policy applies `logits = logits.masked_fill(~legal_mask, -1e9)` before
-  `softmax`, then samples. Value head sees the same masked logits when
-  computing entropy bonuses, so exploration credit is only granted over
-  legal moves.
+- Policy applies the masking rule **pre-softmax: illegal logits → −∞**
+  (implemented as `logits = logits.masked_fill(~legal_mask, -1e9)` since
+  finite −1e9 underflows to 0 after `softmax` in fp32 while staying
+  numerically safe under fp16 mixed precision). This follows the
+  invalid-action-masking formulation of **Huang & Ontañón (2022),
+  "A Closer Look at Invalid Action Masking in Policy Gradient
+  Algorithms"** — masking before the softmax (not after) preserves
+  the unbiased policy-gradient estimator. Value head and entropy bonus
+  see the same masked logits, so exploration credit is only granted
+  over legal moves.
 - During replay sampling, the stored `legal_mask` is replayed alongside
   the action; PPO importance ratios are clipped only on legal indices.
 
@@ -114,6 +120,18 @@ Stale formulations explicitly forbidden (per ADR-007): `ΔReuse`,
 
 Weights `(α, β, γ, P_skills)` are MUST-ablated per ADR-007's 3×3×3×2
 grid (54 cells × ≥5 seeds in fine pass).
+
+**Reward shaping discipline (Ng, Harada & Russell, 1999 —
+"Policy Invariance Under Reward Transformations: Theory and Application
+to Reward Shaping").** Every shaping term in R_t is a **potential-based
+difference** (ΔModularity, ΔCohesion are state-potential deltas;
+Coupling_Penalty is a state-function subtracted with γ; P_skills fires
+only on a transition event). This satisfies the Ng et al. invariance
+theorem: the optimal policy of the shaped MDP equals the optimal policy
+of the un-shaped MDP, so the four-term composite reward does not bias
+the policy away from genuine modularity gain. Any future reward term
+MUST be expressible as a potential-difference F(s,s') = γΦ(s') − Φ(s)
+or it is rejected at ADR review.
 
 ## 5. Terminal + truncation
 

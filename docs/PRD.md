@@ -81,12 +81,15 @@ screenshots — brief §3), one bug-report deliverable (brief §3
   parameterised-action wrapper.
 - Reward `R_t = ΔModularity + ΔCohesion − Coupling_Penalty` (brief §2.2,
   baseline form) **upgraded** per the brief's "highly recommended"
-  upgrade to `R_t = α·ΔModularity + β·ΔCohesion − γ·Coupling_Penalty
-  + λ·skills_loading_safety_penalty` where `α, β, γ, λ` are calibrated
-  per ADR-003 and the **full ablation matrix** runs ≥ 5 seeds per cell
-  (locked decision). The `skills_loading_safety_penalty` term (brief
-  §2.3, "advanced punishment") prevents the agent from breaking the
-  L1 → L2 → L3 tiered-load contract that defines the `Skills` module.
+  upgrade to the canonical form (ADR-007):
+  `R_t = α·ΔModularity_t + β·ΔCohesion_t − γ·Coupling_Penalty_t + P_skills_t`
+  with defaults α=1.0, β=1.0, γ=0.5, P_skills=−5.0 (P_skills is a
+  NEGATIVE penalty — no positive `skills_bonus`, no λ coefficient).
+  Coefficients are calibrated via the §3.5 ablation matrix and the
+  **full ablation matrix** runs ≥ 5 seeds per cell (locked decision).
+  The `P_skills` term (brief §2.3, "advanced punishment") fires when
+  the agent breaks the L1 → L2 → L3 tiered-load contract that defines
+  the `Skills` module. The config key is `reward.p_skills`.
 - PPO clipping at ε = 0.2 (brief §2.3) + GAE at λ = 0.95 (brief §2.3) +
   a "trust region" interpretation in the report (brief §2.3 verbatim).
 - Token-budget accounting in `tiktoken cl100k_base` headline (locked
@@ -276,28 +279,43 @@ Each `F#` is traceable to a brief §-id. The trace matrix
 
 ### 3.5 Ablation matrix (brief §2.2 "highly recommended" upgrade)
 
-- **F11 (Ablation matrix, locked decision)**. Sweep α ∈ {0.5, 1.0, 2.0},
-  β ∈ {0.5, 1.0, 2.0}, γ ∈ {0.5, 1.0, 2.0}, and `P_skills` ∈ {on, off}
-  → 54 cells. The matrix lives in `docs/ABLATION.md` with mean ± std +
-  paired-bootstrap 95 % CI per cell. Compute budget capped at the brief
-  §2.4 envelope.
+- **F11 (Ablation matrix, locked decision)**. Sweep per ADR-007:
+  α ∈ {0.0, 1.0, 2.0}, β ∈ {0.0, 1.0, 2.0}, γ ∈ {0.0, 0.5, 1.0},
+  and `P_skills` ∈ {0.0, -5.0} → 54 cells (the ADR-007 verbatim grid).
+  These are the **ablation grid values**, not the floor / ceiling of
+  the parameter space — the parameter space proper is α, β ≥ 0.0 and
+  γ ∈ [0.0, 1.0] (ADR-007). The matrix lives in `docs/ABLATION.md`
+  with **mean ± std + paired-bootstrap 95 % CI per cell** (10 000
+  resamples against the baseline cell α=0, β=0, γ=0, P_skills=0).
+  Compute budget capped at the brief §2.4 envelope.
 
   **Per-cell wall-clock estimate.** One PPO seed on the `Skills` module
   (≤ 60 nodes, 2e5 timesteps) is budgeted at ~6 min CPU. Full sweep at
   5 seeds × 54 cells = 270 runs × 6 min = **27 CPU-hours** — exceeds
-  the 24 h envelope. Therefore the ablation runs in **coarse-then-fine**
-  staging (locked):
+  the 24 h envelope. Therefore the ablation runs in **scout-then-final**
+  staging (locked, ADR-007 verbatim):
 
   1. **Scout pass** — 3 seeds × 54 cells = 162 runs × 6 min =
-     ~16 CPU-hours. Ranks cells by mean reward uplift over baseline.
+     ~16 CPU-hours. Every cell carries mean ± std + 95 % CI
+     (3-seed-degenerate but defensible — the ADR-006 floor for
+     reportable evidence). Cells are ranked by mean reward uplift
+     over the baseline cell (α=0, β=0, γ=0, P_skills=0).
   2. **Final pass** — 5 seeds × top-3 cells = 15 runs × 6 min =
-     ~1.5 CPU-hours. Reports headline numbers with full
-     mean ± std + 95 % CI.
+     ~1.5 CPU-hours. The top-3 scout-pass cells by mean reward uplift
+     advance; the 3 scout seeds are retained and 2 additional seeds
+     are run, bringing each final-pass cell to the 5-seed ADR-006
+     floor. The headline cell (α=1.0, β=1.0, γ=0.5, P_skills=-5.0) is
+     **always** included in the final pass regardless of scout rank;
+     if it is not naturally in the top-3, it is added as a 4th cell
+     (top-3 + headline = 20 runs ≈ 2 CPU-h, still within envelope).
+     Final-pass cells report mean ± std + 95 % CI as the headline
+     numbers in `docs/ANALYSIS.md`.
 
-  Total budget: **~17.5 CPU-hours**, comfortably under 24 h. The
-  staging is documented per-cell in `docs/ABLATION.md`; the 51 cells
-  that receive only scout-pass coverage are explicitly flagged as
-  "3-seed coarse" in their table row.
+  Total budget: **~17.5 CPU-hours** (16 scout + 1.5 final), comfortably
+  under 24 h. The staging is documented per-cell in `docs/ABLATION.md`;
+  the 51 cells that receive only scout-pass coverage are explicitly
+  flagged as "3-seed scout" in their table row, and the top-3 (or top-4
+  with headline) carry the "5-seed final" flag.
 
 ### 3.6 Multi-seed evaluation (locked decision, brief §2.4 honest accounting)
 
@@ -419,7 +437,7 @@ Inherited from `CLAUDE.md` Hard Constraints, plus A4-specific additions.
 | F8  | GAE advantage matches the closed-form on a 5-step synthetic trajectory | `tests/test_gae.py::test_gae_closed_form` |
 | F9  | `results/obsidian_vault/` contains one `.md` per node and `[[wikilink]]` edges | `tests/test_obsidian_export.py::test_vault_structure` |
 | F10 | `results/screenshots/before.png` and `after.png` exist, non-empty, > 1 KB each | `tests/test_screenshots.py::test_before_after_exist` |
-| F11 | `docs/ABLATION.md` contains 54 cells (scout: 3 seeds × 54 = 162 rows; final: 5 seeds × top-3 = 15 rows; total 177 rows), each with mean / std / 95 % CI; coarse rows flagged "3-seed coarse", final rows flagged "5-seed final"; wall-clock per cell + total CPU-hours reported | `tests/test_ablation_table.py::test_matrix_complete` |
+| F11 | `docs/ABLATION.md` contains 54 cells (scout: 3 seeds × 54 = 162 rows; final: 5 seeds × top-3 = 15 rows; +5-run headline augmentation if needed; total 177 or 182 rows), each with mean / std / paired-bootstrap 95 % CI vs baseline cell; scout rows flagged "3-seed scout", final rows flagged "5-seed final"; selection rule (rank by mean reward uplift over baseline, headline-cell always included) documented in the doc preamble; wall-clock per cell + total CPU-hours (~17.5 h) reported | `tests/test_ablation_table.py::test_matrix_complete` |
 | F12 | No headline number in `docs/ANALYSIS.md` is single-seed; regex check for "seed=" plus "mean" plus "std" co-occurrence | `tests/test_analysis_seed_audit.py::test_no_single_seed_claims` |
 | F13 | `docs/BUG_REPORT.md` lists ≥ 2 bugs with subgraph evidence and remedy | `tests/test_bug_report.py::test_min_two_bugs` |
 | F14 | `docs/RESEARCH_ESSAY.md` is 2500–3000 words, 4 H2 sections, ≥ 8 citations, 2 figure references | `tests/test_essay_shape.py::test_word_count_and_structure` |
@@ -656,9 +674,10 @@ D-ids the tests verify.
   advantage, modularity Q, cohesion, coupling, and the
   `P_skills_loading_safety` penalty.
 - `docs/ANALYSIS.md` — multi-seed results (mean ± std + 95 % CI).
-- `docs/ABLATION.md` — 54-cell ablation matrix in coarse-then-fine
-  staging (3-seed scout across all 54 + 5-seed final on top-3 cells;
-  see F11 for the budget arithmetic).
+- `docs/ABLATION.md` — 54-cell ablation matrix in scout-then-final
+  staging (3-seed scout across all 54 + 5-seed final on top-3 cells,
+  headline cell always included; ~17.5 CPU-h budget; see F11 + ADR-007
+  for the full arithmetic and selection rule).
 - `docs/BUG_REPORT.md` — ≥ 2 architectural bugs the agent surfaced.
 - `docs/RESEARCH_ESSAY.md` — 2500–3000-word GRAPHIFY × AI essay
   (brief §2.4, F14).
@@ -669,7 +688,7 @@ D-ids the tests verify.
   ≥ 2 concrete usage examples + L1→L2→L3 contract diagram (F15,
   brief §2.1).
 - `docs/TRACE.md` — bidirectional brief §-id ↔ F# ↔ test mapping.
-- `docs/adr/ADR-001-pythonclaw-shim.md` — BOOTSTRAP_NOW path + 24 h
+- `docs/adr/ADR-001-pythonclaw-shim-boundary.md` — BOOTSTRAP_NOW path + 24 h
   swap window.
 - `docs/adr/ADR-002-graphify-adapter.md` — local GRAPHIFY re-impl
   behind adapter interface.

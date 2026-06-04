@@ -64,7 +64,8 @@ ablation, and justification rows.
 
 **Treat the α/β/γ + P_skills upgrade as MUST.** Implement the full
 weighted reward and ship a full ablation matrix with **≥5 seeds per
-cell**, on a coarse-then-fine plan.
+final-pass cell** (3 seeds per scout-pass cell), on a scout-then-final
+plan.
 
 ### Ablation matrix: 3 × 3 × 3 × 2 = 54 cells × 5 seeds = 270 runs
 
@@ -78,27 +79,54 @@ cell**, on a coarse-then-fine plan.
 Total = 3 × 3 × 3 × 2 = **54 cells**. With 5 seeds per cell that is
 **270 runs**.
 
-### Coarse-then-fine plan (sibling PRD F11)
+### Scout-then-final plan (verbatim with PRD F11)
 
-Per PRD F11 fix, the 270-run grid is executed in two passes to keep
-the compute envelope tractable:
+The full 270-run grid (54 cells × 5 seeds) exceeds the §2.4 24 h
+compute envelope (270 × 6 min ≈ 27 CPU-hours). The grid is therefore
+executed in two passes; the staging here matches PRD F11 verbatim and
+both docs MUST stay in lockstep:
 
-1. **Coarse pass (54 cells × 1 seed = 54 runs).** Single representative
-   seed per cell, short horizon. Used to identify the top-K cells by
-   final ΔModularity and to prune cells where training collapses
-   (e.g. α=2.0, γ=0.0 may exhibit reward hacking — the agent inflates
-   modularity by trivial graph operations because coupling is free).
-2. **Fine pass (top-K cells × 5 seeds, full horizon).** K is chosen so
-   that the fine pass + coarse pass stays within the §2.4 compute
-   envelope. The headline `full` cell (α=1.0, β=1.0, γ=0.5, P_skills=-5.0)
-   is always in the fine pass regardless of coarse-pass rank, so the
-   headline number is reported with the full 5-seed mean±std±95% CI.
+1. **Scout pass — 3 seeds × 54 cells = 162 runs (~16 CPU-hours).**
+   Three seeds per cell at the full horizon. Used to rank cells by
+   mean reward uplift over the baseline cell (α=0, β=0, γ=0,
+   P_skills=0) and to flag cells where training collapses (e.g. α=2.0,
+   γ=0.0 may exhibit reward hacking — the agent inflates modularity
+   by trivial graph operations because coupling is free). 3 seeds is
+   the lower bound at which a mean ± std + 95 % CI is reportable
+   (degenerate but defensible) — anything less is anecdote.
+2. **Final pass — 5 seeds × top-3 cells = 15 runs (~1.5 CPU-hours).**
+   The top-3 cells from the scout pass are re-run with 2 additional
+   seeds each (the 3 scout seeds are retained), bringing them to the
+   full 5-seed ADR-006 multi-seed-discipline floor.
 
-Reporting: `results/ablation/coarse/<cell_id>/` and
-`results/ablation/fine/<cell_id>/seed_<n>/`. ANALYSIS.md ships **three**
-tables — headline (full cell only, mean±std±CI), top-K fine ablation
-(K cells × 5 seeds each), and the coarse-pass survey (all 54 cells,
-single seed, marked as exploratory).
+   **Selection rule (top-K = top-3, verbatim).** Cells are ranked by
+   scout-pass mean reward uplift over the baseline cell (α=0, β=0,
+   γ=0, P_skills=0); the top-3 by mean uplift advance to the final
+   pass. The headline `full` cell (α=1.0, β=1.0, γ=0.5,
+   P_skills=-5.0) is **always** in the final pass regardless of
+   scout-pass rank, so the headline number is reported with the full
+   5-seed mean ± std + 95 % CI; if `full` is not in the natural
+   top-3, it is added as a 4th cell (top-3 + headline = 4 cells × 5
+   seeds = 20 runs ≈ 2 CPU-hours, still within envelope).
+
+**Total budget: ~17.5 CPU-hours** (16 scout + 1.5 final), comfortably
+under the 24 h §2.4 envelope.
+
+**Statistical reporting (verbatim).** Every cell — scout and final —
+reports **mean ± std + 95 % CI per cell**. Scout cells carry the
+3-seed flag ("3-seed scout"); final cells carry the 5-seed flag
+("5-seed final"). The 95 % CI is computed via paired bootstrap (10 000
+resamples) against the baseline cell so the uplift confidence
+interval is reported alongside the absolute number.
+
+Reporting layout: `results/ablation/scout/<cell_id>/seed_<n>/` (162
+runs) and `results/ablation/final/<cell_id>/seed_<n>/` (15 runs).
+`docs/ABLATION.md` ships **two** tables — scout-pass survey (all 54
+cells × 3 seeds, mean ± std + 95 % CI, flagged "3-seed scout") and
+final-pass headline (top-3 + headline-if-needed × 5 seeds, mean ± std
++ 95 % CI, flagged "5-seed final"). `docs/ANALYSIS.md` quotes only
+the final-pass headline number for the §2.4 essay; the scout-pass
+table is referenced as the selection-evidence backbone.
 
 ## Justification
 
@@ -129,27 +157,38 @@ single seed, marked as exploratory).
   above by zero and below by the rubric deduction. Defection from
   this asymmetry is what cost Assignment 2 the decaying-α points,
   and the same logic forecloses the SHOULD reading here.
-- **Statistical floor.** 5 seeds per fine-pass cell is the lower bound
-  at which a mean±std reported alongside a 95% CI is defensible as
-  evidence rather than anecdote; below 5, the CI degenerates and the
-  rubric's "reproducibility" row becomes contestable (ADR-006
-  multi-seed discipline).
+- **Statistical floor.** 5 seeds per final-pass cell is the lower
+  bound at which a mean±std reported alongside a 95% CI is defensible
+  as evidence rather than anecdote; below 5, the CI degenerates and
+  the rubric's "reproducibility" row becomes contestable (ADR-006
+  multi-seed discipline). 3 seeds per scout-pass cell is the *minimum*
+  at which a CI is reportable at all (still degenerate but defensible
+  for the selection-evidence backbone); single-seed scout was the prior
+  version of this ADR and was rejected because the 51 dropped cells
+  would carry no CI at all.
 
 ## Consequences
 
 - `config/config.yaml` gains an `ablation:` block enumerating the
   3×3×3×2 grid; the trainer reads cell-id from CLI and writes results
-  into `results/ablation/coarse/<cell_id>/` or
-  `results/ablation/fine/<cell_id>/seed_<n>/`.
-- Compute budget: coarse 54 runs + fine top-K × 5 seeds × convergence-
-  bounded training. Costed in §2.4 essay and in the tiktoken/wall-clock
-  table per ADR-003; full envelope tracked in `docs/COST_ANALYSIS.md`
-  (D8).
-- ANALYSIS.md ships **three** tables: headline (full cell only,
-  mean±std±CI), fine ablation (top-K, mean±std±CI), and coarse survey
-  (all 54 cells, single-seed exploratory).
+  into `results/ablation/scout/<cell_id>/seed_<n>/` (162 scout runs)
+  or `results/ablation/final/<cell_id>/seed_<n>/` (15 final runs;
+  20 if headline-cell augmentation triggers).
+- Compute budget: scout 3 seeds × 54 cells = 162 runs (~16 CPU-hours)
+  + final 5 seeds × top-3 cells = 15 runs (~1.5 CPU-hours) =
+  **~17.5 CPU-hours total**, under the 24 h §2.4 envelope. Costed
+  in the §2.4 essay and in the tiktoken/wall-clock table per ADR-003;
+  full envelope tracked in `docs/COST_ANALYSIS.md` (D8).
+- `docs/ABLATION.md` ships **two** tables: scout-pass survey (all 54
+  cells × 3 seeds, mean ± std + 95 % CI, flagged "3-seed scout") and
+  final-pass headline (top-3 + headline-if-needed × 5 seeds, mean ±
+  std + 95 % CI, flagged "5-seed final"). `docs/ANALYSIS.md` quotes
+  only the final-pass headline cell as the §2.4 essay's reported
+  number; the scout-pass table is the selection-evidence backbone.
 - Lecturer-feedback row "ablation is missing or under-seeded" becomes
-  un-checkable against this submission.
+  un-checkable against this submission: every cell carries ≥3 seeds,
+  the headline cells carry ≥5 (the ADR-006 multi-seed floor), and the
+  selection rule is auditable from the scout-pass table.
 
 ## Alternatives Considered
 
@@ -165,8 +204,23 @@ single seed, marked as exploratory).
   minimisation?). The 3×3×3×2 grid recovers all main effects + the
   three two-way and one three-way interaction terms relevant to the
   shaping discussion.
-- **Single-pass 270 runs.** Rejected on compute envelope; coarse-then-
-  fine recovers ≥95% of the information at ≤30% of the cost.
+- **Single-pass 270 runs.** Rejected on compute envelope (~27 CPU-h
+  > 24 h §2.4 cap); scout-then-final at 3 + 5 seeds (177 runs,
+  ~17.5 CPU-h) recovers the headline statistical guarantee at ≤65 %
+  of the cost.
+- **1-seed scout × 54 cells (prior version of this ADR).** Rejected:
+  a 1-seed scout cannot report mean ± std + 95 % CI on the cells that
+  do **not** advance to the final pass, so the 51 dropped cells would
+  be exploratory-only and the rubric's "ablation reporting" row would
+  be partially un-evidenced. 3-seed scout is the lower bound at which
+  *every* cell in the matrix carries a defensible (if wide) CI.
+- **3-seed scout × 54 + 10-seed × top-3 (compute-budget upside).**
+  Logged as a stretch goal in `docs/COST_ANALYSIS.md`: if the §2.4
+  envelope has headroom at the time the final pass runs, the top-3
+  cells are re-seeded to 10 seeds each (additional ~1.5 CPU-h),
+  tightening the headline CI. Not the default plan because the
+  17.5 CPU-h budget is the verbatim PRD F11 contract; the upgrade
+  is opt-in, not opt-out.
 - **Potential-based reformulation of the brief.** Rejected for this
   submission: it would deviate from the verbatim §2.2 / §2.4 formula
   and invite a different grading dispute. Logged as future work in
@@ -184,4 +238,5 @@ single seed, marked as exploratory).
   P_skills_t).
 - ADR-006 (multi-seed eval discipline — defines the ≥5-seed floor
   and 95% CI convention).
-- PRD F11 (ablation matrix deliverable + coarse-then-fine plan).
+- PRD F11 (ablation matrix deliverable + scout-then-final plan;
+  this ADR and F11 MUST stay verbatim in lockstep).

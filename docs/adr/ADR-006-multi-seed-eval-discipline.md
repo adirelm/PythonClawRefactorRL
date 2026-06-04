@@ -3,7 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-06-04
 - **Supersedes:** none
-- **Related:** ADR-003 (tiktoken cost metric), ADR-005 (convergence criterion),
+- **Related:** ADR-003 (tiktoken cost metric), ADR-010 (dual-criterion convergence),
   OQ-4 (statistical-power open question), A3 retrospective,
   CLAUDE.md §CANONICAL "Betweenness call discipline" (twice per seed)
 

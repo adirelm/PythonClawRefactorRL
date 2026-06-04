@@ -24,6 +24,73 @@ V_max policy, `V_max = 512` is a **fallback cap**, not the primary path
 (ADR-004 GraphSAGE accepts variable-|V| via PyG DataLoader; padding-to-512
 applies only if SB3 RolloutBuffer cannot handle Dict obs).
 
+## Decision
+
+**Spike-then-fallback.** We do not preemptively commit to a buffer
+architecture. On Phase 1, Day 2, we run a **2-hour timeboxed spike**
+(`notebooks/00_buffer_spike.ipynb`) that probes three candidate paths
+**in declared order**:
+
+1. **(a) Dict obs + custom `features_extractor`** — preferred path,
+   preserves ADR-004 GraphSAGE size-independence.
+2. **(b) Pad-to-`V_max=512` + boolean action mask + flat MLP** —
+   fallback path, gated by this ADR and STATE_DESIGN §4's CONDITIONAL
+   `V_max` cap.
+3. **(c) Custom PPO wrapper over SB3 primitives** — last-resort path,
+   budgeted at +1 day beyond the spike.
+
+The first path whose pass criteria (defined per-path below) are met
+inside the 2-hour window wins. If (a) fails → fall back to (b); if (b)
+also fails → escalate to (c). Outcome is recorded in a post-spike
+amendment that flips this ADR from **Proposed (spike-gated)** to
+**Accepted (path X)** and unblocks Phase 3 trainer work.
+
+Until the amendment lands, **no trainer code may assume a buffer
+shape**, and `V_max = 512` remains a CONDITIONAL fallback per
+STATE_DESIGN §4 — neither retired nor in force.
+
+## Decision Rationale
+
+Preemptively committing to a buffer architecture before the spike is
+worse than spike-gating, because the three candidate paths impose
+**mutually incompatible** constraints on the rest of the stack:
+
+- Path (a) requires `gym.spaces.Dict` observations and a custom
+  `features_extractor`. ADR-004's GraphSAGE size-independence claim
+  survives intact; `V_max` is retired.
+- Path (b) requires a fixed-width flat tensor with a boolean action
+  mask. ADR-004's size-independence claim is **broken** by the
+  padding, and STATE_DESIGN §4's CONDITIONAL `V_max = 512` becomes
+  the binding cap (with graphs |V| > 512 dropped from the corpus
+  and disclosed in §2.4).
+- Path (c) keeps GraphSAGE intact but forces us to maintain a
+  hand-rolled PPO collect-rollouts loop, with a 1e-6 numerical
+  equivalence bar against stock SB3.
+
+The information value of running the spike — i.e. learning *which*
+of these three regimes our stack actually lives in — strictly
+dominates committing in advance, because:
+
+1. **Cost of being wrong is asymmetric.** Choosing (b) preemptively
+   and discovering in week 3 that (a) would have worked is recoverable
+   only by re-doing all training runs (≥5 seeds × baselines).
+   Choosing (a) preemptively and discovering it does not boot is the
+   "week-3 discovery is unrecoverable" failure mode the grade-strategy
+   round explicitly flagged.
+2. **Cost of the spike is bounded.** 2 hours on Day 2, with a single
+   notebook artifact and a written amendment. No production code is
+   written against the spike's assumptions.
+3. **Downstream contracts depend on the outcome.** ADR-004
+   (GraphSAGE primary path) and STATE_DESIGN §4 (CONDITIONAL `V_max`)
+   both have branches that activate or retire based on which spike
+   path wins. Committing now would either invalidate ADR-004 (if we
+   pick b) or invalidate STATE_DESIGN §4's conditional clause (if we
+   pick a) — without evidence.
+
+The spike is therefore the **cheapest** way to resolve the
+architectural fork, and the only mechanism that keeps ADR-004 and
+STATE_DESIGN §4 honest until the evidence is in.
+
 ## Spike (Day 2, 2-hour timebox per CLAUDE.md §A4)
 
 Notebook: `notebooks/00_buffer_spike.ipynb`.

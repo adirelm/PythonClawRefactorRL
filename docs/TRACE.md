@@ -36,6 +36,19 @@ sections) plus the §3 deliverables checklist. Where a definition from
 §1.x is the natural home for context, it appears in the requirement
 text only — never in the §-id column.
 
+## Brief §1.x cross-link (definitions → F-ids)
+
+Although §1.1/§1.2/§1.3 are not requirement rows, they are anchored to
+concrete F-id features / N-id notes / PRDs / ADRs below so a grader can
+still trace from any introductory definition to the artifact that
+implements its semantics.
+
+| Brief § | Topic | Covered by |
+|---|---|---|
+| §1.1 | PythonClaw Skills L1/L2/L3 | F15 + N9 (PRD-SKILLS + ADR-011) |
+| §1.2 | GRAPHIFY G=(V,E) | F1 + F2 + ADR-002 (PRD-GRAPHIFY) |
+| §1.3 | Obsidian Vault | F9 + F10 + ADR-009 |
+
 ---
 
 ## §1 — Refactor Track (PythonClaw → SOLID + DI)
@@ -71,11 +84,10 @@ text only — never in the §-id column.
 | §2.2 | Reward shaping `R_t = α·ΔModularity_t + β·ΔCohesion_t − γ·Coupling_Penalty_t + P_skills_t` with α=1.0, β=1.0, γ=0.5, **P_skills = −5.0** (lazy-load-break penalty, NEGATIVE); full ablation matrix ≥5 seeds/cell. | `src/env/reward.py`, `scripts/run_ablation.py` | `tests/unit/test_reward_shape.py`, `tests/integration/test_ablation_matrix.py` | `results/ablation/reward_ablation_heatmap.png`, `results/ablation/seed_table.csv`, `docs/adr/ADR-007-reward-upgrade-MUST.md`, `docs/prd/PRD-SKILLS.md` | `<bootstrap-commit>` | ⬜ planned |
 | §2.2 — betweenness | Betweenness centrality computed **exactly twice per seed** (training start + training end), aggregated across ≥5 seeds with mean ± std + 95% CI for both endpoints AND Δ. | `src/graphify/centrality.py` | `tests/unit/test_betweenness_seed_stability.py`, `tests/architecture/test_betweenness_call_count.py` | `results/graphs/betweenness_ci.png`, `results/graphs/betweenness_table.csv`, `docs/adr/ADR-006-multi-seed-eval-discipline.md` | `<bootstrap-commit>` | ⬜ planned |
 | §2.3 | PPO (Schulman 2017, arXiv:1707.06347) + GAE(λ) (Schulman 2016, arXiv:1506.02438) with proper advantage normalisation; SB3 buffer spike timeboxed 2h, padding-to-V_max=512 fallback gated by ADR-008. | `src/model/ppo_policy.py`, `src/model/gae.py` | `tests/unit/test_gae_math.py`, `tests/integration/test_ppo_one_update.py` | `results/training/ppo_learning_curve.png`, `docs/prd/PRD-PPO.md`, `docs/prd/PRD-GAE.md`, `docs/adr/ADR-008-sb3-variable-v-buffer.md` | `<bootstrap-commit>` | ⬜ planned |
-| §2.3 — convergence | Dual criterion: rolling-100 reward stable ±2% × 50 episodes **AND** entropy < threshold. | `src/services/convergence.py` | `tests/unit/test_convergence_dual_criterion.py` | `results/training/convergence_panel.png`, `docs/adr/ADR-010-dual-convergence-criterion.md` | `<bootstrap-commit>` | ⬜ planned |
+| §2.3 — convergence | Dual criterion: non-overlapping rolling-100 ±2% AND \|dH/dt\| < entropy_slope_threshold (per ADR-010). | `src/services/convergence.py` | `tests/unit/test_convergence_dual_criterion.py` | `results/training/convergence_panel.png`, `docs/adr/ADR-010-dual-convergence-criterion.md` | `<bootstrap-commit>` | ⬜ planned |
 | §2.3 — encoder | GraphSAGE (primary, variable-\|V\| via PyG DataLoader) vs MLP (V_max=512 padding fallback) encoder comparison gated by ADR-004 + ADR-008. | `src/model/encoders/graphsage.py`, `src/model/encoders/mlp.py` | `tests/unit/test_encoder_parity.py` | `results/training/encoder_compare.png`, `docs/adr/ADR-004-graphsage-vs-mlp-encoder.md` | `<bootstrap-commit>` | ⬜ planned |
-| §2.4 — essay | 2500–3000 word essay on Active Knowledge Architecture; 4 sections, 8–12 citations, 2 diagrams. | n/a (prose deliverable) | `tests/architecture/test_essay_wordcount.py` | `docs/essay/active_knowledge_architecture.md`, `docs/diagrams/aka_overview.png`, `docs/diagrams/aka_feedback_loop.png` | `<bootstrap-commit>` | ⬜ planned |
+| §2.4 — essay | 2500–3000 word essay on **GRAPHIFY × AI agents** (brief-verbatim: הקשר בין מנוע GRAPHIFY לבין עבודה עם סוכני AI) — feedback loop, failure modes, governance; 4 sections, 8–12 citations, 2 diagrams. AKA (Active Knowledge Architecture) is the lecture-side framing; the brief itself uses the GRAPHIFY×AI phrasing. | n/a (prose deliverable) | `tests/architecture/test_essay_wordcount.py`, `tests/architecture/test_graphify_ai_essay.py` | `docs/essay/graphify_x_ai.md`, `docs/diagrams/aka_overview.png`, `docs/diagrams/aka_feedback_loop.png` | `<bootstrap-commit>` | ⬜ planned |
 | §2.4 — cost analysis | Cost envelope documented in `docs/COST_ANALYSIS.md` (tiktoken cl100k_base headline + chars/bytes appendix). | n/a (prose + table deliverable) | `tests/architecture/test_cost_envelope.py` | `docs/COST_ANALYSIS.md`, `results/cost/token_cost_table.csv` | `<bootstrap-commit>` | ⬜ planned |
-| §2.4 — GRAPHIFY×AI essay | Reflective essay on how GRAPHIFY interacts with AI-assisted refactoring — feedback loop, failure modes, governance. | n/a (prose deliverable) | `tests/architecture/test_graphify_ai_essay.py` | `docs/essay/graphify_x_ai.md` | `<bootstrap-commit>` | ⬜ planned |
 
 ---
 
@@ -115,6 +127,8 @@ text only — never in the §-id column.
 | Deliv-18 | PRD-GAE — GAE product requirements. | n/a | n/a | `docs/prd/PRD-GAE.md` | `58bf82f` | ✅ done |
 | Deliv-19 | PRD-GRAPHIFY — graphify product requirements. | n/a | n/a | `docs/prd/PRD-GRAPHIFY.md` | `58bf82f` | ✅ done |
 | Deliv-20 | PRD-SKILLS — skills/reward product requirements. | n/a | n/a | `docs/prd/PRD-SKILLS.md` | `58bf82f` | ✅ done |
+| §3 bug-report | ≥2 architectural bugs documented | docs/BUG_REPORT.md | tests/test_bug_report.py | — | <pending> | ⬜ |
+| §3 before/after | Obsidian Graph View before/after | scripts/capture_obsidian.py | tests/test_screenshots.py | results/screenshots/before.png + after.png | <pending> | ⬜ |
 
 ---
 
@@ -189,8 +203,8 @@ that Phase 1–4 will create. Listed for grader transparency.
 - `docs/SKILLS_ARCHITECTURE.md` — F15, Phase 2 will author.
 - `docs/ANALYSIS.md` — D7, Phase 3 will author.
 - `docs/COST_ANALYSIS.md` — D8, Phase 4 will author.
-- `docs/essay/active_knowledge_architecture.md` — §2.4 essay, Phase 4.
-- `docs/essay/graphify_x_ai.md` — §2.4 GRAPHIFY×AI essay, Phase 4.
+- `docs/BUG_REPORT.md` — Phase 4 deliverable.
+- `docs/essay/graphify_x_ai.md` — §2.4 GRAPHIFY × AI agents essay, Phase 4 (AKA diagrams `docs/diagrams/aka_*.png` support this single essay; topic relabeled to brief-verbatim phrasing).
 - `docs/diagrams/env_state_diagram.png` — Phase 2.
 - `docs/diagrams/solid_dep_graph.png` — Phase 1.
 - `docs/diagrams/aka_overview.png` — Phase 4.

@@ -56,7 +56,7 @@ The ex04 brief sections map onto this repo as follows (full mapping lands in
 - [`docs/QUALITY.md`](docs/QUALITY.md) — quality gates + self-audit log
 - [`docs/THEORY.md`](docs/THEORY.md) — §2.4 essay with citations
 - [`docs/adr/`](docs/adr/) — architecture decision records
-  (ADR-001 PythonClaw shim · ADR-002 GraphifyAdapter · ADR-003 SB3 timebox)
+  (ADR-001 PythonClaw shim · ADR-002 GraphifyAdapter · ADR-003 tiktoken cost metric)
 
 ## Architecture (preview)
 

@@ -5,7 +5,7 @@
 - **Deciders:** Architect (human), implementer (AI)
 - **Supersedes:** —
 - **Related:** ADR-001 (PythonClaw shim), ADR-003 (tiktoken cost),
-  ADR-004 (convergence dual criterion), ADR-011 (SkillsAdapter), OQ-5
+  ADR-010 (dual-criterion convergence), ADR-011 (SkillsAdapter), OQ-5
 
 ## Context
 

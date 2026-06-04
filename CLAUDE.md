@@ -108,9 +108,9 @@ Install deps: `uv sync --dev`
 
 ### PPO + GAE (the only RL algorithm in this assignment)
 
-- **PPO clip ε = 0.2 — FIXED** by ex04 §2.3. Asserted in
-  `tests/architecture/test_ppo_constants.py`. Do not tune.
-- **GAE λ = 0.95 — FIXED** by ex04 §2.3. Asserted in the same test.
+- **PPO clip ε = 0.2 — FIXED** by ex04 §2.3 (Phase 1 follow-up: dedicated
+  arch test for the constant is not yet in `tests/architecture/`). Do not tune.
+- **GAE λ = 0.95 — FIXED** by ex04 §2.3 (same Phase 1 follow-up).
   Do not tune.
 - γ = 0.99 (configurable but defaulted in `config/config.yaml`).
 - Clipped surrogate objective (Schulman 2017 eq. 7):
@@ -120,10 +120,14 @@ Install deps: `uv sync --dev`
 
 ### Custom Training Loop (NOT gym.Env)
 
-- The env is a Python object that yields `(state, action_mask, reward, done)`
-  but is **not** registered as a `gym.Env`. The PPO trainer lives in
-  `src/services/ppo_trainer.py` and owns rollout collection, GAE computation,
-  minibatch SGD, and logging. Asserted in `tests/architecture/test_no_gym_env.py`.
+- Brief §2.2 verbatim BANS Gymnasium (Hebrew: ללא סביבת Gymnasium). The env
+  is a Python object yielding `(state, action_mask, reward, done)` but is
+  NEVER registered as a `gym.Env`. NO `gymnasium` import allowed under
+  `src/env/` or `src/services/`. AST-level enforcement:
+  `tests/architecture/test_env_no_gym.py` asserts no `ImportFrom 'gymnasium'`
+  node in the tree.
+- The PPO trainer lives in `src/services/ppo_trainer.py` and owns rollout
+  collection, GAE computation, minibatch SGD, and logging.
 - Stable-Baselines3 is allowed by the brief for the comparison baseline only,
   and the SB3 path gets a 2-hour timebox spike with a padding/masking
   fallback (ADR-003).
@@ -131,23 +135,26 @@ Install deps: `uv sync --dev`
 ### Skills-only scope lock
 
 - The graph builder must reject any module path not under the Skills layer.
-  Asserted in `tests/architecture/test_skills_only_scope.py` — any non-Skills
-  node in a built graph fails the test.
+  Phase 1 follow-up: a dedicated arch test for this scope lock is not yet in
+  `tests/architecture/`; until then the lock is enforced inside the
+  `GraphifyAdapter.build()` path itself.
 
 ### Centrality discipline
 
 - **Degree** centrality is cheap and may be recomputed per step (it ships in
   the observation).
-- **Betweenness** is O(|V|·|E|) and is computed only at episode start,
-  episode end, and the final-evaluation sweep — i.e. exactly
-  `centrality.betweenness_calls_per_seed = 3` calls per seed.
-  Asserted in `tests/architecture/test_centrality_discipline.py`.
+- **Betweenness** is O(|V|·|E|) and is computed exactly twice per seed
+  (start + end ONLY) per brief §2.2 — NO "final-eval" third call.
+  `centrality.betweenness_calls_per_seed = 2`. Enforced by
+  `tests/architecture/test_betweenness_call_count.py`.
 
 ### Reward (brief ex04 §2.3)
 
-`r_t = α·ΔModularity_t + β·ΔCohesion_t − γ·ΔCoupling_t + P_skills·1[lazy_load_broken]`
+`R_t = α·ΔModularity_t + β·ΔCohesion_t − γ·Coupling_Penalty_t + P_skills_t`
 
-with α = 1.0, β = 1.0, γ = 0.5, P_skills = −5.0, all in `config.yaml`.
+with α = 1.0, β = 1.0, γ = 0.5, P_skills = −5.0 (NEGATIVE penalty), all in
+`config.yaml` under `reward.p_skills`. Canonical form matches ADR-007 and is
+asserted by `tests/architecture/test_reward_formula.py`.
 The lazy-load-break detector walks `sys.modules` after each step and
 asserts the P95 token budget; any regression triggers `P_skills`.
 
@@ -189,7 +196,7 @@ All config in `config/config.yaml`:
   ent_coef, max_grad_norm
 - `gae` — lambda (FIXED 0.95), gamma
 - `reward` — alpha, beta, gamma, p_skills
-- `centrality` — betweenness_calls_per_seed (= 3)
+- `centrality` — betweenness_calls_per_seed (= 2; start + end ONLY per brief §2.2)
 - `seeds` — list of ≥ 5 seeds for paired comparisons
 - `training` — max_episodes + convergence (rolling_window, reward_drift_pct,
   consecutive_episodes, entropy_threshold)

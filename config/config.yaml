@@ -21,30 +21,37 @@ reward:
   p_skills: -5.0  # lazy-load-break penalty (BIG NEGATIVE)
 
 centrality:
-  betweenness_calls_per_seed: 3  # start + end + final-eval; asserted in test_centrality_discipline.py
+  betweenness_calls_per_seed: 2  # start + end ONLY (brief §2.2; ADR-006); enforced by tests/architecture/test_betweenness_call_count.py
+
+state:
+  feature_dim: 16  # X ∈ ℝ^{|V|×16}; columns documented in docs/STATE_DESIGN.md §2
+  relation_weights:
+    call: 1.0
+    import: 0.5
+    inheritance: 0.7
+  normalization:
+    loc_log1p: true  # log1p normalize LOC
+    cyclomatic_clip: 50  # clip cyclomatic above 50
 
 action:
-  # A_max arithmetic (ACTION_DESIGN §1):
-  # V_max=512, K=8, M=16, E_max=4096, R=8
-  # A_split  = 512 × 8  = 4096
-  # A_merge  = 512 × 16 = 8192
-  # A_rewire = 4096 × 8 = 32768
-  # A_noop   = 1
-  # A_max    = 4096 + 8192 + 32768 + 1 = 45057
-  a_max_total: 45057
+  a_max_total: 45057  # = 4096 + 8192 + 32768 + 1 per docs/ACTION_DESIGN.md §1
+  split_choices_k: 8
+  merge_topm: 16
+  rewire_topr: 8
 
 seeds: [42, 7, 123, 314, 271]  # ≥5 for statistical claims
 
 training:
   max_episodes: 500
-  convergence:
-    rolling_window: 100
-    reward_drift_pct: 2.0
-    consecutive_episodes: 50
-    entropy_threshold: 0.5
+
+convergence:
+  window_length: 100  # episodes per non-overlapping window (ADR-010)
+  step: 100  # non-overlapping; Window A = [t-200:t-100], Window B = [t-100:t]
+  reward_rel_tol: 0.02  # |mean(B)-mean(A)|/|mean(A)| ≤ 0.02
+  entropy_slope_threshold: 0.01  # |dH/dt| over 100-episode window (nats/episode); replaces absolute floor (PRD-PPO F4.9 c2=0.0 makes floor trivial)
 
 environment:
-  max_nodes_v: 512  # padding cap for variable-|V| handling
+  max_nodes_v: 512  # FALLBACK ONLY — ADR-008-gated; primary path is variable-|V| via PyG DataLoader per ADR-004; used only if SB3 RolloutBuffer cannot handle Dict obs
 
 paths:
   vault_dir: "results/vault/"

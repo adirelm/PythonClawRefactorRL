@@ -87,7 +87,7 @@ Variable-|V| graphs are padded to `max_nodes_v=512` with a boolean mask
 | **pythonclaw_shim** | `pythonclaw_shim/__init__.py`, `pythonclaw_shim/contract.py` | Thin import-shim that exposes the names a "real" `pythonclaw` would; raises `NotImplementedError` for unbuilt paths so the 24h swap window is a one-PR change (ADR-001) | Any business logic — must remain a façade |
 | **env** | `env/skills_graph_env.py`, `env/reward.py`, `env/action_mask.py`, `env/padding.py` | Custom Python `reset/step` API over the skills graph (brief §2.2 bans Gymnasium); canonical reward `R_t = α·ΔModularity_t + β·ΔCohesion_t − γ·Coupling_Penalty_t + P_skills_t` (ADR-007 §3); action-masking on inapplicable refactors; fixed-shape obs via padding to `max_nodes_v` (ADR-008) | No `gymnasium` import (AST-checked); no model training; no UI; no disk I/O on hot path |
 | **model** | `model/graphsage_encoder.py`, `model/mlp_encoder.py`, `model/actor_critic_head.py` | `nn.Module` definitions only; GraphSAGE encoder is the headline (ADR-004), MLP-on-pooled-features is the ablation baseline; ActorCritic head emits `(logits[4], value)` | No env access; no training loop; no I/O |
-| **services** | `services/ppo_service.py`, `services/gae_computer.py`, `services/rollout_collector.py`, `services/centrality_probe.py`, `services/convergence_monitor.py`, `services/ablation_runner.py`, `services/evaluator.py` | PPO clipped objective (ex04 §2.3, ε=0.2 FIXED); GAE(γ,λ) with λ=0.95 FIXED; centrality probe ≥5 seeds × ≥1 call/seed (ADR-006); dual convergence criterion (rolling-100 reward ±2% × 50 episodes AND entropy<0.5); full α/β/γ + P_skills ablation matrix | No direct user I/O |
+| **services** | `services/ppo_service.py`, `services/gae_computer.py`, `services/rollout_collector.py`, `services/centrality_probe.py`, `services/convergence_monitor.py`, `services/ablation_runner.py`, `services/evaluator.py` | PPO clipped objective (ex04 §2.3, ε=0.2 FIXED); GAE(γ,λ) with λ=0.95 FIXED; centrality probe ≥5 seeds × exactly 2 calls/seed (start + end ONLY) (ADR-006); dual convergence criterion (rolling-100 reward ±2% × 50 episodes AND entropy<0.5); full α/β/γ + P_skills ablation matrix | No direct user I/O |
 | **sdk** | `sdk/sdk.py`, `sdk/types.py` | Single façade — orchestrates services; the **only** import surface for UIs and the notebook; explicit dataclasses cross the boundary, never raw dicts | No training math inline; no `print()` |
 | **cli** | `cli/menu.py`, `cli/__main__.py` | Numeric terminal menu; argparse entry | Imports anything below SDK |
 | **gui** | `gui/app.py` (Streamlit entry), `gui/pages/` (one file per surface), `gui/theme.py` (Bar-Ilan `#003D7A` / `#FFCD00`), `gui/state.py` (namespaced `gui.<page>.<key>`), `gui/components.py`, `gui/charts.py` (plotly + matplotlib factories, DPI=110), `gui/callbacks.py` (observer hooks for live PPO charts), `gui/data_helpers.py` (`@st.cache_data` SDK wrappers), `gui/explanations.py` (LaTeX blurbs for PPO clip + GAE) | **Direct imports of `env`, `model`, `services`** — all logic via SDK; no inline `plt.*` outside `charts.py`; no un-namespaced `st.session_state` keys |
@@ -133,11 +133,11 @@ sequenceDiagram
     MON-->>SDK: converged? (rolling-100 ±2% × 50 AND H<0.5)
 ```
 
-Centrality is measured *out-of-band*: once per seed × ≥5 seeds (start +
-end + final-eval = ~3 calls/seed) — never on the hot rollout path
-(ADR-006). Variable-|V| is handled by padding inside `env/padding.py`
-before the rollout buffer ever sees the obs, so SB3's fixed-shape
-assumption holds (ADR-008).
+Centrality is measured *out-of-band*: per seed × ≥5 seeds, **exactly 2
+calls/seed (start + end ONLY — no third "final-eval" call)** — never on
+the hot rollout path (ADR-006). Variable-|V| is handled by padding
+inside `env/padding.py` before the rollout buffer ever sees the obs, so
+SB3's fixed-shape assumption holds (ADR-008).
 
 ## §4 — Hyperparameter tree
 
@@ -170,7 +170,7 @@ reward:                  # MUST per locked decisions — full ablation
   p_skills: -5.0         # lazy-load-break penalty (BIG NEGATIVE)
 
 centrality:
-  betweenness_calls_per_seed: 3   # start + end + final-eval
+  betweenness_calls_per_seed: 2   # exactly 2: start + end ONLY (ADR-006)
 
 seeds: [42, 7, 123, 314, 271]     # ≥5 for statistical claims
 
@@ -258,7 +258,8 @@ trivial I/O):
   MLP on ≤512 nodes) and **GAE accumulation** (single backward scan
   over `n_steps=128`). Both CPU-bound; GIL does not bind.
 - I/O is trivial: GRAPHIFY runs once per seed (cached pickle);
-  centrality ≤3 times/seed (ADR-006). No worker pool warranted.
+  centrality exactly 2 calls/seed (start + end ONLY, ADR-006). No
+  worker pool warranted.
 - Vector envs help only if `env.step` is the bottleneck; profile target
   is `<5 ms/step` at |V|=512 — forward/backward dominates by 10×.
 - Reproducibility (per ADR-006) is materially harder under
@@ -288,7 +289,7 @@ Sequenced phase-milestones; each phase is a single TDD commit
 | **0** | **Bootstrap** (already underway) | `pyproject.toml`, `config/config.yaml`, `pythonclaw_shim/` skeleton, ADR-001…009 stubs, ruff + uv green | `test_bootstrap_smoke.py` (import every package), `test_ppo_constants.py` (FIXED constants present) |
 | **1** | **GRAPHIFY adapter + repo ingest** | `GraphifyAdapter.build_graph(repo_path) → nx.DiGraph`; `NodeFeaturizer` (LOC, fan-in/out, role); `EdgeBuilder` (call, import, inherit); `lazy_load_probe` cycle detector; tiktoken token-count headline; graph cache pickle | `test_graphify_adapter.py`, `test_node_features.py`, `test_edge_types.py`, `test_lazy_load_probe.py` (broken-cycle detected), `test_token_count_headline.py` (cl100k_base + chars/bytes appendix) |
 | **2** | **Env + reward + masking + padding** | `SkillsGraphEnv.reset/step` (custom Python API — brief §2.2 bans Gymnasium); canonical reward `R_t = α·ΔModularity_t + β·ΔCohesion_t − γ·Coupling_Penalty_t + P_skills_t` (ADR-007 §3); `ActionMaskService`; padding to `max_nodes_v=512` (ADR-008 fallback — primary path is variable-|V| PyG DataLoader per ADR-004) | `tests/architecture/test_env_no_gym.py` (AST-level — no `gymnasium` import in `src/env/`), `test_env_step_shapes.py`, `test_reward_signs.py` (each term flips reward in the expected direction; `P_skills` is NEGATIVE), `test_action_mask.py` (masked → prob 0 post-softmax), `test_padding_invariance.py` (policy output equals dense path for unmasked nodes) |
-| **3** | **PPO + GAE service + convergence + centrality probe** | `GAEComputer.compute(γ,λ)`; `PPOService.train(seeds)`; `ConvergenceMonitor` (dual criterion); `CentralityProbe` (≥5 seeds, ≤3 calls/seed); `RolloutCollector` | `test_gae_formula.py`, `test_ppo_clip_invariant.py`, `test_advantage_normalization.py`, `test_convergence_dual_criterion.py`, `test_centrality_discipline.py` (call-count cap enforced) |
+| **3** | **PPO + GAE service + convergence + centrality probe** | `GAEComputer.compute(γ,λ)`; `PPOService.train(seeds)`; `ConvergenceMonitor` (dual criterion); `CentralityProbe` (≥5 seeds, exactly 2 calls/seed — start + end ONLY); `RolloutCollector` | `test_gae_formula.py`, `test_ppo_clip_invariant.py`, `test_advantage_normalization.py`, `test_convergence_dual_criterion.py`, `test_centrality_discipline.py` (call-count cap enforced) |
 | **4** | **SDK facade + CLI + GUI + notebook + ablation matrix + screenshots + §2.4 essay + skills theory + learning curves + cost envelope** | `RefactorSDK.{build_graph, train, evaluate, ablate, recommend_refactor}`; `cli/menu.py`; `gui/` Streamlit dashboard; `notebooks/analysis.ipynb`; full α/β/γ + P_skills ablation matrix (≥5 seeds/cell); programmatic NetworkX/pyvis screenshots + Obsidian hero shots; `docs/essay_2_4.md` (2500–3000 words, 4 sections, 8–12 citations, 2 diagrams); **F15** `docs/SKILLS_ARCHITECTURE.md` (L1/L2/L3 theoretical deep-dive + ≥2 concrete usage examples, brief §2.1 mandate); **D6** `results/learning_curves/reward_vs_episode.png` (mean ± 95% CI over ≥5 seeds); **D7** ΔReward (final − initial mean ± std + 95% CI) in `docs/ANALYSIS.md`; **D8** cost envelope in `docs/COST_ANALYSIS.md` | `test_sdk_smoke.py`, `test_cli_menu.py`, `test_gui_foundation.py`, `test_notebook_runs_nbclient.py`, `test_ablation_matrix_complete.py`, `test_screenshots_exist.py`, **F16** `tests/test_learning_curve.py` (asserts reward-over-training PNG exists + ΔReward numeric reported) |
 
 **Definition of Done (per phase)** — PRD approved, TDD commit landed,
@@ -310,7 +311,7 @@ and config keys.
 | **ADR-003** | Tiktoken cl100k_base as headline cost metric (+ chars/bytes appendix) | Lecturer-grader-readable token count; cl100k_base is the de-facto LLM cost basis; chars/bytes kept as appendix so cl100k drift over time does not invalidate historical figures. |
 | **ADR-004** | GraphSAGE vs MLP encoder | GraphSAGE is the headline (uses graph structure); MLP-on-pooled-features is the ablation baseline; lets us isolate the value of message passing. |
 | **ADR-005** | Lazy-load-broken semantics via cycle detection | Honest over-approximation of the §"lazy-load-broken" signal; documented limitation: detects *necessary* but not *sufficient* break conditions. |
-| **ADR-006** | Multi-seed eval discipline (≥5 seeds; centrality ≤3 calls/seed) | Forces statistical honesty (mean ± std + 95% CI) and bounds centrality cost (betweenness is O(VE)). |
+| **ADR-006** | Multi-seed eval discipline (≥5 seeds; centrality exactly 2 calls/seed — start + end ONLY, no third "final-eval" call) | Forces statistical honesty (mean ± std + 95% CI) and bounds centrality cost (betweenness is O(VE)). |
 | **ADR-007** | Canonical reward equation (brief §2.2 verbatim): `R_t = α·ΔModularity_t + β·ΔCohesion_t − γ·Coupling_Penalty_t + P_skills_t` with α=1.0, β=1.0, γ=0.5, P_skills=−5.0 | Pins the reward shape to a defensible refactor-quality decomposition; `P_skills` is a NEGATIVE penalty on lazy-load-break (no positive `skills_bonus`); full α/β/γ + P_skills ablation matrix proves each term matters. **See ADR-007 §3 for canonical equation + `config/config.yaml` keys.** |
 | **ADR-008** | Variable-|V| handling: padding to `max_nodes_v=512` is a CONDITIONAL fallback (only if SB3 RolloutBuffer cannot handle Dict obs); primary path is variable-|V| via PyG DataLoader per ADR-004 | Spike-gated; STATE_DESIGN and ADR-008 status reconciled (both "spike-gated"). |
 | **ADR-009** | Screenshot pipeline (programmatic NetworkX/pyvis + Obsidian hero shots) | Deterministic, reproducible screenshots — no manual capture; each figure regenerable from `uv run scripts/render_figures.py`. |
