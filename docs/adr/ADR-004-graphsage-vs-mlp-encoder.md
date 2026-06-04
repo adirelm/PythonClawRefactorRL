@@ -1,9 +1,9 @@
 # ADR-004: GraphSAGE vs MLP encoder for variable-|V| code-graph state
 
 - **ID**: ADR-004
-- **Status**: Accepted
+- **Status**: Accepted (primary path)
 - **Date**: 2026-06-04
-- **Related**: ADR-002 (GraphifyAdapter)
+- **Related**: ADR-002 (GraphifyAdapter), ADR-008 (SB3 variable-|V| buffer spike), STATE_DESIGN §4
 
 ## Context
 
@@ -50,13 +50,52 @@ context.
 
 | Aspect | GraphSAGE (2-layer, PyG) | MLP on padded adjacency |
 |---|---|---|
-| Variable \|V\| | Native | Pad + mask to max \|V\| |
+| Variable \|V\| | Native (PyG `DataLoader` batches per-graph) | Pad + mask to max \|V\| |
 | Topology preserved | Yes | No (flattened) |
-| Parameter count | Independent of max \|V\| | Grows with max \|V\|^2 |
+| Parameter count | Independent of max \|V\| (see V_max note) | Grows with max \|V\|^2 |
 | Inductive on unseen nodes | Yes (Hamilton et al. 2017) | No |
 | Per-step forward cost | Higher than same-width MLP | Lower per FLOP |
 | Extra runtime dependency | Yes (`torch-geometric`) | No |
 | Sample efficiency on graph tasks | Better | Worse |
+
+Note on alternatives: **GAT/GATv2** (attention aggregator) and **GIN**
+(injective sum aggregator, Xu et al. 2019) were also considered as
+size-independent encoders. Both are viable swaps for `SAGEConv` if a
+later ablation shows mean-aggregation is the bottleneck; GraphSAGE is
+chosen as the primary because of its explicit inductive sampling story
+that matches our cross-file generalization requirement.
+
+## V_max reconciliation (size-independence vs ADR-008 fallback)
+
+The "parameter count independent of max |V|" claim above is a property
+of the encoder itself: a 2-layer SAGEConv has weights of shape
+`(in_dim, hidden) + (hidden, out)`, with no dependence on |V|. This
+holds regardless of how observations reach the encoder.
+
+What *can* depend on a `V_max` cap is the **rollout buffer layout**,
+not the encoder. Per CANONICAL V_max policy and ADR-008:
+
+- **Primary path (this ADR).** GraphSAGE accepts variable-|V| natively
+  via the PyG `DataLoader` / `Batch.from_data_list` path. If the
+  ADR-008 spike confirms SB3 `RolloutBuffer` can carry our `Dict` obs
+  (outcome A: custom `features_extractor` + native variable-|V|), then
+  `V_max` is **unused at runtime** — observations stream into the
+  encoder at their natural size and `max_nodes_v = 512` is only a
+  defensive ceiling for cost accounting.
+
+- **Fallback path (ADR-008 outcomes B/C).** If `RolloutBuffer` requires
+  fixed-shape tensors, observations are padded to `V_max = 512` plus a
+  boolean node-mask. GraphSAGE still respects the original |V|:
+  padded rows enter as zero-feature nodes with zero-weight edges in
+  message-passing, the mask zeros them out before mean-pool readout,
+  and per-node action logits over padded slots are masked to `-inf`
+  before the softmax. The encoder's parameter count remains
+  independent of `V_max`; only the per-step FLOP cost and the buffer
+  tensor footprint scale with `V_max`.
+
+STATE_DESIGN §0 and §4 mark `V_max` as **conditional** on this spike
+outcome. ADR-008 is the gating decision; this ADR is the encoder
+contract that holds under either outcome.
 
 ## Justification
 
@@ -98,8 +137,16 @@ Negative:
 - **MLP on flattened, padded adjacency** — rejected (see Tradeoffs).
 - **GCN (Kipf and Welling, 2017)** — viable but originally
   transductive; less natural for unseen graphs across episodes.
-- **Graph Transformer / GATv2** — deferred on cost grounds; revisit
-  if the 2-hop receptive field proves insufficient on larger files.
+- **GAT / GATv2 (Veličković et al. 2018; Brody et al. 2022)** — viable
+  size-independent alternative; attention aggregator may help when
+  node-importance varies sharply across AST/CFG neighbors. Deferred on
+  cost grounds and revisited as a `SAGEConv` swap if the 2-hop
+  receptive field proves insufficient on larger files.
+- **GIN (Xu et al. 2019)** — viable size-independent alternative;
+  injective sum aggregator has stronger theoretical expressive power
+  for graph isomorphism, but is empirically more sensitive to depth
+  and batch-norm tuning than mean-aggregation SAGE on small graphs.
+  Held as a fallback ablation, not the primary.
 - **Hand-crafted graph features into an MLP** — rejected; reintroduces
   manual feature engineering the brief asks us to avoid.
 
@@ -107,7 +154,16 @@ Negative:
 
 - Hamilton, W. L., Ying, R., and Leskovec, J. (2017). *Inductive
   Representation Learning on Large Graphs.* NeurIPS 2017.
+  arXiv:1706.02216.
 - Kipf, T. N. and Welling, M. (2017). *Semi-Supervised Classification
   with Graph Convolutional Networks.* ICLR 2017.
-- PyTorch Geometric documentation — `torch_geometric.nn.SAGEConv`.
+- Veličković, P. et al. (2018). *Graph Attention Networks.* ICLR 2018.
+- Brody, S., Alon, U., and Yahav, E. (2022). *How Attentive are Graph
+  Attention Networks?* ICLR 2022 (GATv2).
+- Xu, K. et al. (2019). *How Powerful are Graph Neural Networks?*
+  ICLR 2019 (GIN).
+- PyTorch Geometric documentation — `torch_geometric.nn.SAGEConv`,
+  `torch_geometric.loader.DataLoader`, `Batch.from_data_list`.
 - ADR-002: GraphifyAdapter (upstream graph contract).
+- ADR-008: SB3 variable-|V| buffer spike (gates V_max usage).
+- STATE_DESIGN §4: observation-space contract and V_max policy.
