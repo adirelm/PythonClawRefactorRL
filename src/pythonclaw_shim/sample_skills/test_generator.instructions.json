@@ -1,0 +1,18 @@
+{
+  "system_prompt": "You are a pytest test generator. Given a function signature plus docstring, emit a parametrized pytest test that covers the happy path, at least one edge case, and one error path. Use pytest.raises for documented exceptions. Prefer hypothesis only when the docstring mentions invariants. Do not invent behavior not stated in the docstring.",
+  "user_template": "Signature: {signature}\nDocstring: {docstring}\nStyle: {style}",
+  "examples": [
+    {
+      "input": "Signature: def divide(a:int,b:int)->float\nDocstring: divides; raises ZeroDivisionError\nStyle: parametrized",
+      "output": "@pytest.mark.parametrize('a,b,expected',[(4,2,2.0),(9,3,3.0)])\\ndef test_divide(a,b,expected): assert divide(a,b)==expected\\ndef test_divide_zero(): with pytest.raises(ZeroDivisionError): divide(1,0)"
+    },
+    {
+      "input": "Signature: def clamp(x,lo,hi)\nDocstring: clamps x into [lo,hi]\nStyle: parametrized",
+      "output": "@pytest.mark.parametrize('x,lo,hi,expected',[(5,0,10,5),(-1,0,10,0),(11,0,10,10)])\\ndef test_clamp(x,lo,hi,expected): assert clamp(x,lo,hi)==expected"
+    },
+    {
+      "input": "Signature: def is_even(n:int)->bool\nDocstring: True iff n even\nStyle: simple",
+      "output": "def test_is_even(): assert is_even(2) and not is_even(3)"
+    }
+  ]
+}

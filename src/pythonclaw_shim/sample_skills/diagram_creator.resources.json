@@ -1,0 +1,39 @@
+{
+  "knowledge_base": [
+    "Mermaid renders deterministically only when node ids are stable strings; auto-generated ids change between runs.",
+    "Graphviz dot is best for hierarchical graphs; neato suits force-directed layouts of small undirected graphs.",
+    "Edge labels should be short; long labels cause edge crossings that defeat the purpose of a diagram.",
+    "LR (left-to-right) layout reads better for pipelines; TB (top-to-bottom) reads better for class hierarchies.",
+    "Subgraphs in mermaid use 'subgraph name ... end'; nested subgraphs render but degrade with more than two levels.",
+    "Color should encode at most one dimension; using both color and shape for the same axis is wasted ink.",
+    "Mermaid live editor strips comments; keep the canonical source in the repo and treat the editor as a preview.",
+    "For diffs over time, render to SVG and commit the SVG so reviewers can see graph changes without re-rendering.",
+    "Cyclic dependency diagrams should highlight back-edges (target rank < source rank) in red to draw the eye.",
+    "When a graph has more than 50 nodes, partition by cluster (community detection) before rendering."
+  ],
+  "config": {
+    "default_format": "mermaid",
+    "default_layout": "LR",
+    "supported_formats": ["mermaid", "graphviz"],
+    "supported_layouts": ["LR", "TB", "RL", "BT"],
+    "max_nodes_without_split": 50,
+    "max_label_chars": 24,
+    "back_edge_color": "#cc0000",
+    "node_shape": "box",
+    "edge_arrow": "-->",
+    "render_to_svg": true,
+    "svg_width_px": 1200,
+    "svg_height_px": 800,
+    "include_legend": true,
+    "color_palette": ["#5b8def", "#7fc97f", "#f0a830", "#cf5c36", "#a07cc5"],
+    "font_family": "Inter, system-ui, sans-serif",
+    "background": "transparent"
+  },
+  "templates": {
+    "mermaid_lr": "graph LR\\n{nodes}\\n{edges}",
+    "mermaid_subgraph": "subgraph {name}\\n{nodes}\\nend",
+    "graphviz_dot": "digraph G {\\n  rankdir={layout};\\n{nodes}\\n{edges}\\n}",
+    "edge": "{src} {arrow}|{label}| {dst}",
+    "back_edge_style": "linkStyle {idx} stroke:{color},stroke-width:2px"
+  }
+}

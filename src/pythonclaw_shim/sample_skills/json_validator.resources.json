@@ -1,0 +1,39 @@
+{
+  "knowledge_base": [
+    "JSON Schema draft 2020-12 is the current recommendation; draft-07 is still common in tooling like ajv and jsonschema.",
+    "additionalProperties:false rejects unknown keys; pair it with patternProperties when extension keys are allowed.",
+    "Required is a sibling of properties, not a child — putting it inside properties is the most frequent author error.",
+    "$ref resolution can produce infinite loops if a schema references itself transitively; cap depth at 100.",
+    "Reporting all errors instead of bailing on first matches users' mental model of validation as a checklist.",
+    "Numeric type:integer rejects 1.0 in strict mode, but many validators accept it by default; document the choice.",
+    "Format keywords like 'email' and 'uri' are optional in 2020-12; validators should declare which formats they enforce.",
+    "Date-time format must follow RFC 3339; ISO 8601 weeks and ordinals are not allowed by the spec.",
+    "When a property's schema is boolean false, no value is valid for that property — including absence if required.",
+    "Error paths should use JSON Pointer (RFC 6901) so they round-trip into both editors and CI annotations."
+  ],
+  "config": {
+    "draft": "2020-12",
+    "strict_types": true,
+    "report_all_errors": true,
+    "max_ref_depth": 100,
+    "enforce_formats": ["email", "uri", "date-time", "ipv4"],
+    "coerce_types": false,
+    "remove_additional": false,
+    "use_defaults": false,
+    "error_path_style": "json_pointer",
+    "max_errors_returned": 100,
+    "treat_integer_as_strict": true,
+    "allow_nan": false,
+    "allow_infinity": false,
+    "duplicate_keys_policy": "error",
+    "unicode_normalization": "NFC",
+    "log_validation_ms": true
+  },
+  "templates": {
+    "error_entry": "{path}: {message} (keyword={schema_keyword})",
+    "ok_summary": "Document valid against {schema_id} in {elapsed_ms}ms.",
+    "fail_summary": "{n} errors against {schema_id} in {elapsed_ms}ms.",
+    "ref_loop": "Aborting: $ref loop at {pointer} exceeded depth {max_depth}.",
+    "format_unknown": "Format '{fmt}' not enforced; ignored."
+  }
+}

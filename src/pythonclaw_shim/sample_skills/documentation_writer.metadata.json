@@ -1,0 +1,8 @@
+{
+  "name": "documentation_writer",
+  "version": "1.0.0",
+  "description": "Writes prose documentation, docstrings, and reference pages.",
+  "estimated_tokens": {"L1": 50, "L2": 500, "L3": 5000},
+  "tags": ["docs", "writing", "reference"],
+  "depends_on": ["file_search"]
+}

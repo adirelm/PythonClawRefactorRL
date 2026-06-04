@@ -1,0 +1,39 @@
+{
+  "knowledge_base": [
+    "Reference pages exist to answer 'what does this do' fast; tutorials answer 'how do I get started'; do not mix the two.",
+    "Quick-start sections that fit on one screen convert browsers into users; longer quick-starts get scrolled past.",
+    "Every code example should be copy-paste runnable; if it depends on setup, that setup belongs above the example.",
+    "Linking to source code with stable permalinks (a tag or sha) keeps docs from rotting when files move.",
+    "Audience-shaped voice: 'you' for contributors and end users, 'we' for researchers when discussing design.",
+    "Docs that fail to mention failure modes are half-finished; list the most common error and how to recover.",
+    "Examples should cover: minimal happy path, realistic happy path, common error path; that is enough for a reference.",
+    "Avoid passive voice in API docs; 'the registry loads metadata' is clearer than 'metadata is loaded by the registry'.",
+    "Cross-link related modules with 'See also' so readers can navigate by concept, not just alphabetical sidebar.",
+    "Version the docs alongside the code; out-of-sync docs cost more credibility than missing docs."
+  ],
+  "config": {
+    "sections_order": ["overview", "quick_start", "api", "examples", "see_also"],
+    "voice": "second_person",
+    "tense": "present",
+    "max_quick_start_lines": 30,
+    "code_block_language": "python",
+    "include_failure_modes": true,
+    "min_examples": 3,
+    "max_examples": 6,
+    "link_style": "permalink",
+    "include_changelog_link": true,
+    "include_source_link": true,
+    "wrap_columns": 100,
+    "use_admonitions": true,
+    "admonition_types": ["note", "warning", "tip"],
+    "render_engine": "mkdocs-material",
+    "include_table_of_contents": true
+  },
+  "templates": {
+    "page": "# {module}\\n\\n## Overview\\n{overview}\\n\\n## Quick start\\n{quick_start}\\n\\n## API\\n{api}\\n\\n## Examples\\n{examples}\\n\\n## See also\\n{see_also}",
+    "api_entry": "### `{symbol}{signature}`\\n\\n{summary}\\n\\n**Parameters:** {params}\\n**Returns:** {returns}\\n**Raises:** {raises}",
+    "example": "```python\\n{code}\\n```",
+    "admonition": "!!! {kind}\\n    {text}",
+    "see_also": "- [{label}]({url})"
+  }
+}

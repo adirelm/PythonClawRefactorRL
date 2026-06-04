@@ -1,0 +1,40 @@
+{
+  "knowledge_base": [
+    "Parametrize identical assertions over different inputs; do not unroll into copy-pasted tests that diverge over time.",
+    "Use pytest.raises with match=... to assert both the exception type and a stable substring of the message.",
+    "Hypothesis is overkill for simple value-based tests; reserve it for invariants like 'sort is idempotent'.",
+    "Floating-point assertions should use pytest.approx with rel=1e-6 unless the docstring specifies tolerance.",
+    "Tests should set seeds with random.seed(0) and np.random.seed(0) to keep behaviour deterministic across runs.",
+    "Mocks should patch the symbol where it is used, not where it is defined; this is the #1 mocking pitfall.",
+    "Avoid mocking objects under test; mocking their collaborators is fine, mocking themselves is a smell.",
+    "Test names follow test_<unit>_<scenario>_<expected> so failures read like sentences in the test report.",
+    "Use tmp_path fixture for filesystem tests; never write into the repo's working tree from a test.",
+    "Coverage gates should be enforced per-module; a project-wide gate hides untested files inside a well-tested project."
+  ],
+  "config": {
+    "default_style": "parametrized",
+    "use_hypothesis": false,
+    "approx_rel_tol": 1e-6,
+    "approx_abs_tol": 1e-12,
+    "seed_random": 0,
+    "seed_numpy": 0,
+    "tmp_path_fixture": true,
+    "max_param_cases": 8,
+    "include_negative_cases": true,
+    "include_boundary_cases": true,
+    "include_error_paths": true,
+    "test_name_pattern": "test_{unit}_{scenario}_{expected}",
+    "framework": "pytest",
+    "min_assertions_per_test": 1,
+    "max_assertions_per_test": 5,
+    "coverage_gate_per_module": 0.85,
+    "coverage_gate_project": 0.85
+  },
+  "templates": {
+    "parametrized": "@pytest.mark.parametrize('{params}',[{cases}])\\ndef {name}({params}):\\n    {body}",
+    "raises": "def {name}():\\n    with pytest.raises({exc}, match='{match}'):\\n        {call}",
+    "approx": "assert {actual} == pytest.approx({expected}, rel={rel})",
+    "skip_if": "@pytest.mark.skipif({cond}, reason='{reason}')",
+    "fixture_use": "def {name}({fixtures}):\\n    {body}"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "name": "markdown_formatter",
+  "version": "1.0.0",
+  "description": "Formats and lints markdown documents for style consistency.",
+  "estimated_tokens": {"L1": 50, "L2": 500, "L3": 5000},
+  "tags": ["markdown", "formatting", "lint"],
+  "depends_on": ["documentation_writer"]
+}

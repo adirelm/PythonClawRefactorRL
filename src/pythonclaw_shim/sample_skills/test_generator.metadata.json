@@ -1,0 +1,8 @@
+{
+  "name": "test_generator",
+  "version": "1.0.0",
+  "description": "Generates pytest unit tests from function signatures and docstrings.",
+  "estimated_tokens": {"L1": 50, "L2": 500, "L3": 5000},
+  "tags": ["testing", "pytest", "generation"],
+  "depends_on": ["python_execution", "code_review"]
+}

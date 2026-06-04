@@ -1,0 +1,8 @@
+{
+  "name": "code_review",
+  "version": "1.0.0",
+  "description": "Reviews Python diffs for correctness, style, and security issues.",
+  "estimated_tokens": {"L1": 50, "L2": 500, "L3": 5000},
+  "tags": ["review", "quality", "python"],
+  "depends_on": ["python_execution", "file_search"]
+}

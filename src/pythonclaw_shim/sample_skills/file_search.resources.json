@@ -1,0 +1,39 @@
+{
+  "knowledge_base": [
+    "Use pathlib.Path.rglob with the supplied glob; avoid os.walk because rglob handles ** correctly across platforms.",
+    "Binary file detection: read the first 8 KB and bail if the null byte 0x00 appears; this matches git's heuristic.",
+    "Skip directories named .git, .hg, .svn, node_modules, __pycache__, .venv, venv, and .mypy_cache by default.",
+    "Symlink loops are common in conda environments; track visited inodes to abort recursion that revisits a directory.",
+    "Regex compilation should happen once before iteration; recompile-per-line is the most common performance bug in greppers.",
+    "On macOS, case-insensitive filesystems can return duplicate matches when the same file is reached by different casings.",
+    "UTF-8 with errors='replace' lets the search keep going through files that contain a stray non-UTF-8 byte.",
+    "Limit per-file matches to 50 to avoid drowning the caller in hits from a generated file like a 10 MB JSON dump.",
+    "Always return results sorted by (path, line_number) so callers can diff outputs across runs deterministically.",
+    "When the pattern is empty, treat the search as a plain file listing — do not match every line."
+  ],
+  "config": {
+    "default_glob": "**/*",
+    "default_pattern": "",
+    "default_limit": 200,
+    "per_file_match_limit": 50,
+    "ignore_dirs": [".git", "node_modules", "__pycache__", ".venv", "venv"],
+    "ignore_files": ["*.pyc", "*.pyo", "*.so", "*.dylib"],
+    "follow_symlinks": false,
+    "case_insensitive": false,
+    "max_file_size_mb": 25,
+    "binary_sniff_bytes": 8192,
+    "encoding": "utf-8",
+    "encoding_errors": "replace",
+    "sort_results": true,
+    "include_hidden": false,
+    "respect_gitignore": true,
+    "concurrent_workers": 4
+  },
+  "templates": {
+    "match_line": "{path}:{lineno}:{text}",
+    "no_match": "No matches under {root} for pattern '{pattern}' with glob '{glob}'.",
+    "binary_skip": "Skipped binary: {path}",
+    "size_skip": "Skipped (size {size_mb} MB > {limit_mb}): {path}",
+    "symlink_skip": "Skipped symlink outside root: {path}"
+  }
+}

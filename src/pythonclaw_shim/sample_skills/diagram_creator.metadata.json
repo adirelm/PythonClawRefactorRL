@@ -1,0 +1,8 @@
+{
+  "name": "diagram_creator",
+  "version": "1.0.0",
+  "description": "Generates mermaid and graphviz diagrams from structured input.",
+  "estimated_tokens": {"L1": 50, "L2": 500, "L3": 5000},
+  "tags": ["diagram", "mermaid", "visualization"],
+  "depends_on": ["python_execution"]
+}

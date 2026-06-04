@@ -1,0 +1,8 @@
+{
+  "name": "python_execution",
+  "version": "1.0.0",
+  "description": "Executes sandboxed Python snippets and captures stdout, stderr, and exceptions.",
+  "estimated_tokens": {"L1": 50, "L2": 500, "L3": 5000},
+  "tags": ["execution", "python", "sandbox"],
+  "depends_on": ["file_search"]
+}

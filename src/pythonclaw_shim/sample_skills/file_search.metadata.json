@@ -1,0 +1,8 @@
+{
+  "name": "file_search",
+  "version": "1.0.0",
+  "description": "Searches the local filesystem by path glob and content regex.",
+  "estimated_tokens": {"L1": 50, "L2": 500, "L3": 5000},
+  "tags": ["search", "filesystem", "regex"],
+  "depends_on": []
+}

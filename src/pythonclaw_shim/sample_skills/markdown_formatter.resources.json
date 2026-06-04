@@ -1,0 +1,40 @@
+{
+  "knowledge_base": [
+    "ATX headings (#) are preferred over setext (=== underlines) because they parse identically at every level.",
+    "A blank line before and after every heading prevents adjacent paragraphs from being absorbed into the heading.",
+    "Lists need a blank line above and below to avoid being joined into the previous paragraph in CommonMark.",
+    "Tables should align column separators by the longest cell so the source is readable even without a renderer.",
+    "Hard-wrap prose at 100 columns balances diff readability with not interrupting natural sentence flow.",
+    "Code fences must declare a language tag whenever known; this enables syntax highlighting and copy buttons.",
+    "Reference-style links keep paragraphs short; collect long URLs at the bottom of the section, not inline.",
+    "Trailing whitespace at end of line is a soft line break in CommonMark — remove unless intentional.",
+    "Emphasis style should be consistent: pick * for italic and ** for bold project-wide; never mix _ and *.",
+    "Front matter (YAML between --- markers) must be the very first content; even a blank line above breaks it."
+  ],
+  "config": {
+    "heading_style": "atx",
+    "list_marker": "-",
+    "ordered_list_marker": ".",
+    "emphasis_marker": "*",
+    "strong_marker": "**",
+    "wrap_columns": 100,
+    "wrap_strategy": "sentence_aware",
+    "preserve_code_fences": true,
+    "require_fence_language": true,
+    "blank_lines_around_headings": 1,
+    "blank_lines_around_lists": 1,
+    "table_alignment": "padded",
+    "trailing_whitespace": "strip",
+    "front_matter": "yaml",
+    "link_style": "inline",
+    "auto_link_bare_urls": true,
+    "emit_diff_when_requested": true
+  },
+  "templates": {
+    "h1": "# {text}",
+    "h2": "## {text}",
+    "fence": "```{lang}\\n{code}\\n```",
+    "table_row": "| {cells} |",
+    "ref_link": "[{label}][{ref}]"
+  }
+}

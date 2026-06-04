@@ -1,0 +1,8 @@
+{
+  "name": "refactoring_planner",
+  "version": "1.0.0",
+  "description": "Plans multi-step refactorings and emits a safe edit sequence.",
+  "estimated_tokens": {"L1": 50, "L2": 500, "L3": 5000},
+  "tags": ["refactoring", "planning", "python"],
+  "depends_on": ["code_review", "python_execution"]
+}

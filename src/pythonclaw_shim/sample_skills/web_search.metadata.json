@@ -1,0 +1,8 @@
+{
+  "name": "web_search",
+  "version": "1.0.0",
+  "description": "Performs web searches and returns ranked result snippets.",
+  "estimated_tokens": {"L1": 50, "L2": 500, "L3": 5000},
+  "tags": ["search", "retrieval", "web"],
+  "depends_on": []
+}

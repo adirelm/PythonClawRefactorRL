@@ -1,0 +1,38 @@
+{
+  "knowledge_base": [
+    "Blocker findings should block merge; major findings should block merge unless explicitly waived in the PR description.",
+    "Security category covers: deserialization of untrusted input, SQL/command/template injection, secrets in code, and weak crypto.",
+    "Correctness category covers: off-by-one errors, returning wrong type, mutable default arguments, and missing await on coroutines.",
+    "Performance category covers: O(n^2) hot loops, recompiled regex inside a loop, and N+1 query patterns over ORMs.",
+    "Style category should defer to ruff for autofixable rules; reviewers only call out style when ruff is silenced.",
+    "Tests category covers: assert-without-message, time.sleep instead of synchronisation, and tests that mutate global state.",
+    "Reviewers should look for missing CHANGELOG entries when the diff changes a public API in src/sdk/ or src/cli/.",
+    "Diff hunks of more than 400 lines reduce review quality sharply; suggest splitting into a stacked PR series.",
+    "Findings should reference a rule_id when possible (e.g. ruff E501, bandit B301) so the author can suppress with confidence.",
+    "When the diff deletes tests without adding replacements, flag as a major finding even if unrelated to the goal."
+  ],
+  "config": {
+    "max_findings": 25,
+    "max_findings_per_severity": {"blocker": 5, "major": 8, "minor": 10, "nit": 5},
+    "include_categories": ["correctness", "security", "performance", "style", "tests"],
+    "diff_context_lines": 5,
+    "split_threshold_lines": 400,
+    "rule_id_required": false,
+    "require_changelog_paths": ["src/sdk/", "src/cli/"],
+    "ignore_paths": ["docs/", "tests/fixtures/"],
+    "severity_floor": "nit",
+    "ruff_defer_for_style": true,
+    "block_on": ["blocker", "major"],
+    "allow_waiver_via_pr_body": true,
+    "waiver_marker": "REVIEW-WAIVER:",
+    "include_secret_scan": true,
+    "secret_patterns": ["AKIA[0-9A-Z]{16}", "-----BEGIN PRIVATE KEY-----"]
+  },
+  "templates": {
+    "finding": "[{severity}] {file}:{line} {category}: {rationale}",
+    "ok": "No findings above {severity_floor}.",
+    "split_pr": "Diff is {n_lines} lines; consider splitting into smaller PRs (>{threshold}).",
+    "missing_changelog": "Public-API path {path} changed but CHANGELOG was not updated.",
+    "secret_hit": "Possible secret matching pattern {pattern_id} at {file}:{line}."
+  }
+}

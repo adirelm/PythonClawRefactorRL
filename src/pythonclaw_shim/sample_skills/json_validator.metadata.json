@@ -1,0 +1,8 @@
+{
+  "name": "json_validator",
+  "version": "1.0.0",
+  "description": "Validates JSON documents against JSON Schema and emits typed errors.",
+  "estimated_tokens": {"L1": 50, "L2": 500, "L3": 5000},
+  "tags": ["validation", "json", "schema"],
+  "depends_on": []
+}

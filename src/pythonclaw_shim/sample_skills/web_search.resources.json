@@ -1,0 +1,41 @@
+{
+  "knowledge_base": [
+    "Search engines apply query rewriting before retrieval to expand synonyms and correct spelling for better recall.",
+    "Authoritative domains for software topics include python.org, docs.python.org, peps.python.org, pypi.org, and packaging.python.org.",
+    "Freshness windows narrower than 24 hours often return no results because indexing latency commonly exceeds that.",
+    "Deduplication by registered domain (not full host) avoids leaking three results from the same site under subdomains.",
+    "Result snippets should be truncated at 240 characters with an ellipsis to keep tool output cheap and readable.",
+    "Boolean operators AND, OR, and NOT are supported by most engines but must be UPPERCASE; site: and filetype: are also widely supported.",
+    "When a query is a question, prefer pages whose title also looks like a question; they are usually FAQs or Q&A.",
+    "Always preserve the user query verbatim in the tool log so a reviewer can re-run the same search later.",
+    "Throttle searches to one per second to stay below most public search-API rate limits and avoid 429 errors.",
+    "Cache results by (query, freshness_window) for 10 minutes; cache hits should be reported as cached=true in the response."
+  ],
+  "config": {
+    "engine": "duckduckgo",
+    "safe_search": "moderate",
+    "default_max_results": 5,
+    "default_freshness": "any",
+    "request_timeout_s": 8,
+    "user_agent": "pythonclaw-sample-skill/1.0",
+    "retry_count": 2,
+    "retry_backoff_s": 1.5,
+    "snippet_max_chars": 240,
+    "dedupe_by": "registered_domain",
+    "cache_ttl_s": 600,
+    "rate_limit_per_s": 1,
+    "log_queries": true,
+    "allow_fallback_engine": true,
+    "fallback_engine": "bing",
+    "respect_robots_txt": true,
+    "max_redirects": 3,
+    "tls_verify": true
+  },
+  "templates": {
+    "clarify_question": "Your query '{q}' is ambiguous — did you mean {a} or {b}?",
+    "result_line": "{rank}. {domain} — {title}: {snippet}",
+    "no_results": "No results for '{q}' within freshness {f}; broaden the window or rephrase.",
+    "rate_limited": "Rate limit hit; retry in {retry_after_s}s.",
+    "cached_marker": "[cached] {result_line}"
+  }
+}

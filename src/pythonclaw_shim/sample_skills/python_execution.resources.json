@@ -1,0 +1,39 @@
+{
+  "knowledge_base": [
+    "Subprocess isolation with resource.setrlimit caps memory on POSIX; Windows requires Job Objects via pywin32.",
+    "Wall-clock timeout is enforced by SIGKILL after a grace SIGTERM; record both so the caller knows which fired.",
+    "Stdout and stderr should be captured separately; merging them hides which stream a traceback came from.",
+    "Sys.path should be reset to a known prefix so user code cannot import modules from the caller's working directory.",
+    "Builtin import is restricted by an audit hook (PEP 578) that rejects modules outside the allowlist before loading.",
+    "ResourceWarning at exit is normal for short scripts that open files; suppress it from stderr to reduce noise.",
+    "Faulthandler should be enabled so segfaults in C extensions still produce a traceback in stderr.",
+    "On Linux, prctl(PR_SET_NO_NEW_PRIVS) plus a minimal seccomp filter blocks syscalls like socket and execve.",
+    "Working directory is a fresh tempdir per run; never reuse the same dir because user code can leave state.",
+    "Exit codes follow shell convention: 0 ok, 1 generic error, 124 timeout, 137 OOM-killed (128+9)."
+  ],
+  "config": {
+    "default_timeout_s": 5,
+    "max_timeout_s": 30,
+    "memory_limit_mb": 256,
+    "cpu_seconds_limit": 10,
+    "allowed_imports": ["math", "json", "re", "itertools", "functools", "collections", "statistics", "decimal", "fractions", "datetime"],
+    "denied_imports": ["socket", "subprocess", "os", "sys", "ctypes", "multiprocessing"],
+    "network": "off",
+    "working_dir_strategy": "fresh_tempdir",
+    "capture_stdout": true,
+    "capture_stderr": true,
+    "merge_streams": false,
+    "faulthandler": true,
+    "seccomp_profile": "default-deny",
+    "no_new_privs": true,
+    "kill_grace_ms": 250,
+    "interpreter": "python3.11"
+  },
+  "templates": {
+    "ok": "exit={exit_code} elapsed_ms={elapsed_ms}\\n--- stdout ---\\n{stdout}\\n--- stderr ---\\n{stderr}",
+    "timeout": "TimeoutError after {timeout_s}s; sent SIGTERM then SIGKILL.",
+    "oom": "OOM-killed; memory limit {memory_limit_mb} MB exceeded.",
+    "denied_import": "ImportError: '{module}' is not on the allowlist.",
+    "syscall_blocked": "SyscallBlocked: '{syscall}' rejected by seccomp profile {profile}."
+  }
+}

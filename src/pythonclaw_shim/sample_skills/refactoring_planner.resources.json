@@ -1,0 +1,39 @@
+{
+  "knowledge_base": [
+    "Each refactoring step must keep the test suite green; if a step requires test changes, that is itself a step.",
+    "Prefer 'extract function' before 'rename' so the rename happens on a self-contained unit and is easier to revert.",
+    "Splitting a file at the 150-LOC limit usually starts by extracting the largest cohesive class, not by line count.",
+    "Cycles in the import graph are broken by introducing an interfaces.py shared by both ends, not by lazy imports.",
+    "Parameter-object refactor is justified when 3+ scalar arguments always travel together through 2+ call sites.",
+    "Mechanical renames are safe to do in one commit; semantic renames (changing meaning) should be split into two.",
+    "When extracting a method, copy the body first, then re-route call sites, then delete the original — never both at once.",
+    "Refactors that change public exports must update __all__, the SDK facade, and the docs in the same PR.",
+    "Reversibility matters: each step should have a one-line description of how to undo it via git revert of that commit.",
+    "Tools like libcst and rope produce safer renames than regex; prefer them when the rename touches more than 5 files."
+  ],
+  "config": {
+    "max_steps": 10,
+    "max_loc_per_file": 150,
+    "require_green_per_step": true,
+    "require_reversible": true,
+    "rename_tool": "libcst",
+    "extract_strategy": "largest_cohesive_unit_first",
+    "cycle_break_strategy": "interfaces_module",
+    "parameter_object_threshold_args": 3,
+    "parameter_object_threshold_callsites": 2,
+    "split_when_loc_exceeds": 150,
+    "split_target_loc": 120,
+    "update_sdk_facade": true,
+    "update_all_export": true,
+    "update_docs": true,
+    "commit_per_step": true,
+    "preferred_step_size_loc": 60
+  },
+  "templates": {
+    "step": "{n}. {title}\\n   why: {why}\\n   undo: {undo}",
+    "extract": "Extract {symbol} from {src} into {dst}; re-export from {src}.",
+    "rename": "Rename {old} -> {new} across {n_files} files using {tool}.",
+    "split_file": "Split {file} ({loc} LOC) into {parts}; keep public API in {facade}.",
+    "break_cycle": "Move {shared} into {interfaces_module}; have {a} and {b} import from it only."
+  }
+}
