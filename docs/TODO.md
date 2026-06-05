@@ -89,7 +89,7 @@ rather than masking them):
 |---|---|---|---|
 | **0** | **Bootstrap** (repo skeleton, pyproject, uv, ruff, pytest, CI, ≤150-LOC guardrail, docs/ scaffold, ADR-001/002 stubs) | ✅ | `pyproject.toml`, `.github/workflows/ci.yml`, `docs/PRD.md`, `docs/PLAN.md`, `docs/adr/ADR-001-pythonclaw-shim-boundary.md`, `docs/adr/ADR-002-graphify-adapter.md`, commit Phase 0 bootstrap |
 | 1 | §2.1 GRAPHIFY + Obsidian (graph builder, adapter, NetworkX + pyvis screenshots, Obsidian hero shots) | 🟡 in-progress (T1.1–T1.6 ✅, others pending) | `src/graphify/`, `src/graphify/adapter.py`, `results/graphify_output.gpickle`, `results/vault/`, `results/figures/` (Phase 2+: dedicated `results/graphs/` + `results/obsidian/` dirs pending), commit Phase 1 |
-| 2 | §2.2 Environment (state/action design, refactor env, reward = α·ΔModularity + β·ΔCohesion − γ·Coupling_Penalty + P_skills, masking) | ⬜ | `src/env/refactor_env.py`, `src/env/action_mask.py`, `docs/STATE_DESIGN.md`, `docs/ACTION_DESIGN.md`, commit Phase 2 |
+| 2 | §2.2 Environment (state/action design, refactor env, reward = α·ΔModularity + β·ΔCohesion − γ·Coupling_Penalty + P_skills, masking) | ✅ | `src/env/skills_graph_env.py`, `src/env/state.py`, `src/env/actions.py`, `src/env/action_mask.py`, `src/env/reward.py`, `src/services/metrics/{modularity,cohesion,coupling}.py`, `src/services/centrality.py`, `docs/STATE_DESIGN.md`, `docs/ACTION_DESIGN.md`, commit `<phase2-commit>` |
 | 3 | §2.3 PPO + GAE (policy net, GAE advantage, clipped surrogate, SB3 spike + fallback) | ⬜ | `src/training/ppo_trainer.py`, `src/training/gae.py`, `src/policy/policy_net.py`, `docs/adr/ADR-008-sb3-variable-v-buffer.md`, commit Phase 3 |
 | 4 | §2.4 Cost + ablations + essay (tiktoken cost panel, α/β/γ/P_skills ablation matrix ≥5 seeds, ΔReward summary, 2500–3000 word essay) | ⬜ | `docs/COST_ANALYSIS.md` (D8), `results/ablations/`, `docs/ANALYSIS.md` (D7 ΔReward), `docs/ESSAY.md`, `notebooks/analysis.ipynb`, commit Phase 4 |
 
@@ -152,13 +152,34 @@ bundle that gates Phase 1 closure.
 | T01-11 | Add `docs/diagrams/graph_overview.svg` — high-level architecture diagram (parser → builder → adapter → env) referenced from PRD + essay | Authoring graph-overview diagram | 1 | +0 | §2.1-diagram | SVG exists; referenced from PRD §Architecture and Essay §Method |
 | T01-12 | Author `docs/SKILLS_ARCHITECTURE.md` (F15) — L1/L2/L3 theoretical deep-dive (skill hierarchy → composition → reuse) with ≥2 concrete usage examples per brief §2.1 mandate | Authoring SKILLS_ARCHITECTURE.md (F15) | 1 | +250 docs | F15,§2.1-skills | File exists; L1/L2/L3 sections present; ≥2 worked examples; cross-referenced from PRD §Skills |
 
-## §3.2 Phase 2 — §2.2 Environment (⬜ pending)
+## §3.2 Phase 2 — §2.2 Environment (✅ workflow-level T2.1–T2.10 landed)
 
 Goal: define the RL environment that wraps the code graph — state vector,
 action space, reward `R_t = α·ΔModularity_t + β·ΔCohesion_t − γ·Coupling_Penalty_t + P_skills_t`
 (brief §2.2 verbatim — P_skills is a NEGATIVE penalty applied on lazy-load
 break), terminal conditions, and the action-masking service. No Gymnasium
 import in `src/env/` (brief §2.2 mandate "ללא סביבת Gymnasium").
+
+### §3.2.0 Phase 2 workflow-level tasks (T2.1–T2.10 ✅ landed)
+
+The Phase 2 build workflow tracks these ten top-level deliverables, all of
+which landed in this workflow run. The fine-grained T02-NN rows below
+remain the per-acceptance-test surface; T2.x rows are the workflow-level
+bundle that gates Phase 2 closure.
+
+| id | content | status | evidence pointer |
+|----|---------|--------|------------------|
+| T2.1 | State encoder (A, X, edge_attrs) per `docs/STATE_DESIGN.md` + ADR-002 | ✅ | `src/env/state.py`, commit `<phase2-commit>` |
+| T2.2 | Action space (split_module, merge_modules, rewire_edge, noop; A_max=45057) per `docs/ACTION_DESIGN.md` | ✅ | `src/env/actions.py`, commit `<phase2-commit>` |
+| T2.3 | Action masking (pre-softmax logit → −∞, Huang & Ontañón 2022) | ✅ | `src/env/action_mask.py`, commit `<phase2-commit>` |
+| T2.4 | Canonical reward `R_t = α·ΔModularity + β·ΔCohesion − γ·Coupling_Penalty + P_skills` (α=1.0, β=1.0, γ=0.5, P_skills=−5.0) | ✅ | `src/env/reward.py`, commit `<phase2-commit>` |
+| T2.5 | Custom graph env (`step` / `reset`) — **NO Gymnasium import** (brief §2.2 ban) | ✅ | `src/env/skills_graph_env.py`, commit `<phase2-commit>` |
+| T2.6 | Metrics services — modularity, cohesion, coupling | ✅ | `src/services/metrics/modularity.py`, `src/services/metrics/cohesion.py`, `src/services/metrics/coupling.py`, commit `<phase2-commit>` |
+| T2.7 | Centrality service + CentralityScheduler (degree per step; betweenness exactly 2×/seed per ADR-006) | ✅ | `src/services/centrality.py`, commit `<phase2-commit>` |
+| T2.8 | Architecture test `tests/architecture/test_env_no_gym.py` **active** (no `xfail`) — AST walk of `src/env/` rejecting `import gymnasium` | ✅ | `tests/architecture/test_env_no_gym.py`, commit `<phase2-commit>` |
+| T2.9 | Architecture test `tests/architecture/test_betweenness_call_count.py` **active** — patches `networkx.betweenness_centrality`, asserts 2 calls/seed | ✅ | `tests/architecture/test_betweenness_call_count.py`, commit `<phase2-commit>` |
+| T2.10 | Episode smoke script — random-policy rollout from `reset()` to `done=True` | ✅ | `scripts/run_episode_smoke.py`, commit `<phase2-commit>` |
+
 
 | id | content | activeForm | phase | LOC-Δ | req | acceptance |
 |----|---------|------------|-------|-------|-----|------------|

@@ -7,47 +7,52 @@ Brief §2.2 + ADR-006 + CLAUDE.md canonical discipline:
 Any extra call leaks compute budget; any missing call breaks the Δ-Betweenness
 comparison required in ANALYSIS.md.
 
-NOTE: config/config.yaml currently shows `centrality.betweenness_calls_per_seed: 3`
-(start + end + final-eval). The CANONICAL spec (CLAUDE.md) pins it at 2.
-This test enforces the canonical 2; if the project genuinely needs 3, the
-config and CLAUDE.md must be reconciled BEFORE relaxing this assertion.
+Phase-2 surface area: ``SkillsGraphEnv.__init__`` makes CALL 1 (initial
+graph snapshot) and ``SkillsGraphEnv.final_betweenness()`` makes CALL 2
+(final graph snapshot). Phase-3 will wire the SDK ``train_one_seed`` loop
+around this same env contract; the call-count invariant is identical.
+
+A 3rd betweenness call within the same seed must raise ``RuntimeError``
+from ``CentralityScheduler`` — the canonical budget is hard, not advisory.
 """
 
 from __future__ import annotations
 
-import importlib
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
+from src.env.skills_graph_env import SkillsGraphEnv
+from src.services import centrality as centrality_mod
 
-@pytest.mark.xfail(
-    reason="Phase 3 will implement src/services/centrality.py and the training loop",
-    strict=False,
-)
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+SOURCE_DIR = REPO_ROOT / "src" / "pythonclaw_shim" / "sample_skills"
+
+
 def test_betweenness_called_exactly_twice_per_seed() -> None:
-    """compute_betweenness must be invoked exactly 2 times in one seed's training."""
-    try:
-        centrality = importlib.import_module("src.services.centrality")
-    except ModuleNotFoundError:
-        pytest.xfail("src/services/centrality.py not yet implemented (Phase 3 pending)")
-        return
-
-    try:
-        sdk = importlib.import_module("src.sdk")
-        train_one_seed = sdk.train_one_seed
-    except (ModuleNotFoundError, AttributeError):
-        pytest.xfail("src.sdk.train_one_seed not yet implemented (Phase 3 pending)")
-        return
-
+    """compute_betweenness must be invoked exactly 2 times in one seed's env lifecycle."""
     with patch(
         "src.services.centrality.compute_betweenness",
-        wraps=centrality.compute_betweenness,
+        wraps=centrality_mod.compute_betweenness,
     ) as spy:
-        train_one_seed(seed=42)
+        env = SkillsGraphEnv(SOURCE_DIR, seed=42)  # CALL 1 (init / start)
+        env.reset()
+        # A typical training loop would run env.step(...) here; betweenness
+        # is NOT computed per-step (Degree only — ADR-006), so step calls
+        # must NOT bump the spy count.
+        env.final_betweenness()  # CALL 2 (end)
 
     assert spy.call_count == 2, (
         f"compute_betweenness called {spy.call_count} times; canonical spec "
         f"(CLAUDE.md + brief §2.2 + ADR-006) requires EXACTLY 2 calls per "
         f"seed: once at training start, once at training end."
     )
+
+
+def test_betweenness_third_call_raises() -> None:
+    """The scheduler's hard budget must block any 3rd call within the same seed."""
+    env = SkillsGraphEnv(SOURCE_DIR, seed=42)  # CALL 1
+    env.final_betweenness()  # CALL 2
+    with pytest.raises(RuntimeError, match="budget"):
+        env.final_betweenness()  # CALL 3 — must raise
