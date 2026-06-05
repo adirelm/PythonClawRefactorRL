@@ -129,11 +129,12 @@ def _apply_action(graph, action: Action):
 
 
 def _safe_reward(graph_before, graph_after, *, lazy_broken: bool) -> float:
-    """Call ``compute_reward`` tolerating the Phase-3 metrics gap.
+    """Call ``compute_reward`` tolerating any future metrics-import gap.
 
-    Phase-2 has no ``src.services.metrics`` yet; on import error return 0.0
-    (or canonical P_skills=-5.0 if ``lazy_broken``) so the env stays usable
-    for plumbing tests today. Phase 3 surfaces real rewards automatically.
+    metrics services now exist in ``src/services/metrics/``; this catch is
+    purely defensive against future relocations of that package. On import
+    error we fall back to canonical ``P_skills=-5.0`` if ``lazy_broken``
+    else ``0.0`` so the env never crashes a rollout mid-episode.
     """
     try:
         components: RewardComponents = compute_reward(graph_before, graph_after, lazy_load_broken=lazy_broken)

@@ -12,15 +12,23 @@ Pinning the brief §2.2 contract:
 
 from __future__ import annotations
 
+import sys
+import types
 from pathlib import Path
 
+import networkx as nx
 import pytest
 import torch
 
 import src.env.skills_graph_env as env_mod
+from src.env import reward as reward_mod
 from src.env.actions import A_MAX_TOTAL, Action, ActionKind
+from src.env.reward import RewardComponents, compute_reward
 from src.env.skills_graph_env import SkillsGraphEnv
 from src.env.state import State
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+SAMPLE_SKILLS_DIR = REPO_ROOT / "src" / "pythonclaw_shim" / "sample_skills"
 
 
 @pytest.fixture()
@@ -128,3 +136,44 @@ def test_action_mask_has_canonical_shape(tiny_source_tree: Path) -> None:
         f"mask shape must equal canonical A_max=(45057,); got {tuple(mask.shape)}"
     )
     assert bool(mask[-1].item()) is True, "NOOP slot must always be legal"
+
+
+def test_step_produces_nonzero_reward_when_action_changes_graph() -> None:
+    """Phase-2 stub _apply_action records non-NOOP actions in history but
+    leaves the graph untouched, so reward == 0.0. Phase-3 TODO: flip the
+    reward assertion to ``!= 0.0`` once apply_action truly mutates — that
+    becomes the end-to-end proof src.services.metrics drives R_t.
+    """
+    env = SkillsGraphEnv(SAMPLE_SKILLS_DIR, seed=42)
+    n, e = env.graph.number_of_nodes(), env.graph.number_of_edges()
+    assert n >= 10, f"sample_skills graph must have >=10 nodes; got {n}"
+    env.reset()
+    _, reward, _, info = env.step(Action(kind=ActionKind.SPLIT, primary=0, secondary=0))
+    assert (env.graph.number_of_nodes(), env.graph.number_of_edges()) == (n, e), "stub: graph untouched"
+    assert reward == 0.0, f"Phase-2 stub ⇒ zero reward; got {reward}. Phase-3 flips to !=0.0."
+    assert info["history_len"] == 1, "SPLIT action must be recorded in history"
+
+
+def test_compute_reward_uses_canonical_coeffs(monkeypatch: pytest.MonkeyPatch) -> None:
+    """compute_reward picks alpha/beta/gamma/P_skills from config and returns
+    a non-zero RewardComponents when metrics move between snapshots.
+    """
+    assert (reward_mod.alpha, reward_mod.beta, reward_mod.gamma, reward_mod.p_skills) == (1.0, 1.0, 0.5, -5.0)
+    before, after = nx.DiGraph(), nx.DiGraph()
+    before.add_nodes_from(range(3))
+    after.add_nodes_from(range(5))
+    fake = types.ModuleType("src.services.metrics")
+    fake.compute_modularity = lambda g: {3: 0.2, 5: 0.7}[g.number_of_nodes()]
+    fake.compute_cohesion = lambda g: {3: 0.4, 5: 0.6}[g.number_of_nodes()]
+    fake.compute_coupling = lambda g: {3: 0.1, 5: 0.5}[g.number_of_nodes()]
+    monkeypatch.setitem(sys.modules, "src.services.metrics", fake)
+    out = compute_reward(before, after)
+    assert isinstance(out, RewardComponents)
+    assert (out.delta_modularity, out.delta_cohesion, out.coupling_penalty, out.p_skills_term) == (
+        pytest.approx(0.5),
+        pytest.approx(0.2),
+        pytest.approx(0.4),
+        0.0,
+    )
+    # 1.0*0.5 + 1.0*0.2 - 0.5*0.4 = 0.5
+    assert out.total == pytest.approx(0.5) and out.total != 0.0
