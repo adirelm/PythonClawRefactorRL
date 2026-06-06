@@ -15,7 +15,7 @@
 | P1-E2 | <hypothesis> | <setup> | <result> | <verdict> |
 | P2-E1 | <hypothesis> | <setup> | <result> | <verdict> |
 | P2-E2 | <hypothesis> | <setup> | <result> | <verdict> |
-| P3-E1 | <hypothesis> | <setup> | <result> | <verdict> |
+| P3-E1 | 5-seed PPO smoke | 2 of 5 done; 123/314/271 hung on Categorical(-inf); see Known gaps; rerun after R1 hang fix | INCONCLUSIVE_PENDING_RETRAIN |
 | P3-E2 | <hypothesis> | <setup> | <result> | <verdict> |
 | P3-E3 | <hypothesis> | <setup> | <result> | <verdict> |
 | P4-E1 | <hypothesis> | <setup> | <result> | <verdict> |

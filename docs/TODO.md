@@ -219,7 +219,7 @@ bundle that gates Phase 3 closure.
 | T3.4 | PPO trainer — clipped surrogate ε=0.2 (FIXED), value loss, entropy bonus; wraps our 4-tuple `SkillsGraphEnv` directly (NO gymnasium) | ✅ | `src/services/ppo_trainer.py`, commit `71f0213` |
 | T3.5 | Policy net — actor-critic torso, Categorical head, value head V_φ(s) | ✅ | `src/model/policy_net.py`, commit `71f0213` |
 | T3.6 | Encoder — GraphSAGE primary / MLP fallback (V_max=512 FALLBACK only per ADR-004 + ADR-008) | ✅ | `src/model/encoder.py`, commit `71f0213` |
-| T3.7 | Train script — end-to-end PPO rollout on `SkillsGraphEnv` across 5 seeds {42, 7, 123, 314, 271} | ✅ | `scripts/train_ppo.py`, commit `71f0213` |
+| T3.7 | Train script — end-to-end PPO rollout on `SkillsGraphEnv` across 5 seeds {42, 7, 123, 314, 271} | 🟡 in-progress | `scripts/train_ppo.py`, commit `71f0213` captured seeds 42 + 7 only; seeds 123 / 314 / 271 hung on `Categorical(logits=all_-inf)` NaN-explosion in `policy_net.get_action` when action_mask went all-False on a degenerate post-rollout graph. R1 (NOOP-slot pin + uniform-on-NOOP fallback) + R2 (5-seed retrain) in flight. See **Known gaps** below. |
 | T3.8 | Obsidian after-refactor hero shot (closes F10 partial → ✅) | ✅ | `results/figures/obsidian_after.png`, commit `71f0213` |
 | T3.9 | Betweenness CI chart + per-seed table — mean ± std + 95% CI across 5 seeds × 2 calls/seed | ✅ | `results/figures/betweenness_ci.png`, `results/data/betweenness_table.csv`, commit `71f0213` |
 
@@ -238,6 +238,13 @@ bundle that gates Phase 3 closure.
 | T03-10 | Author `docs/THEORY.md` — PPO clipped surrogate, GAE-λ derivation, value-loss + entropy bonus, with cross-reference table to `src/training/` modules (PPO: Schulman et al. 2017 arXiv:1707.06347; GAE: Schulman et al. 2016 arXiv:1506.02438) | Authoring THEORY.md (PPO + GAE) | 3 | +220 docs | §2.3-theory | All 4 equations render in LaTeX; cross-ref table names exact `src/` module per equation; both arXiv IDs cited |
 | T03-11 | Render `results/learning_curves/reward_vs_episode.png` (D6) — mean ± 95% CI over ≥5 seeds of episode reward across training; caption names seeds, episode count, and rolling window | Rendering learning-curve PNG (D6) | 3 | +90 | D6,§2.3-run | PNG exists; caption includes seed list, episode count, mean ± 95% CI band; aggregated across ≥5 seeds |
 | T03-12 | Author `tests/test_learning_curve.py` (F16) — assert `results/learning_curves/reward_vs_episode.png` exists after a short training run AND assert ΔReward (final − initial mean) is computed and stored numerically (not just plotted) | Authoring learning-curve test (F16) | 3 | +80 test | F16,D6,D7 | Test fails if PNG missing OR if ΔReward numeric not extractable from results artifact |
+
+## Known gaps (Phase 3 rework, 2026-06-07)
+
+- **5-seed hang (commit 71f0213)**: seeds 123 / 314 / 271 hung in the 5000-step PPO run because the action_mask went all-False on a degenerate post-rollout graph and `Categorical(logits=all_-inf)` NaN-explodes. Symptom in V5 of Phase 3 validation.
+- **Doc-vs-artifact lie (commit 71f0213)**: aggregate.json honestly reported num_seeds=2 + chart title honestly said "across 2 seeds" — but TRACE F10 / TODO T3.7 were marked "done" claiming 5. Demoted in this rework.
+- **Fix in flight**: NOOP slot pinned True in action_mask + uniform-on-NOOP fallback in get_action (R1 of rework).
+- **Retrain in flight**: 5-seed PPO re-runs after R1 lands; aggregate + chart + CSV regenerated with num_seeds=5 + dof=4 (R2 of rework).
 
 ## §3.4 Phase 4 — §2.4 Cost + ablations + essay (⬜ pending)
 
