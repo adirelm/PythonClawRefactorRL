@@ -1,0 +1,14 @@
+{
+  "mean_final_reward": -0.592499993625097,
+  "num_seeds": 2,
+  "per_seed_final_reward": {
+    "42": -0.4399999675806612,
+    "7": -0.7450000196695328
+  },
+  "seeds": [
+    42,
+    7
+  ],
+  "std_final_reward": 0.1525000260444358,
+  "total_steps_per_seed": 128
+}

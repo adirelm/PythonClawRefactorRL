@@ -139,19 +139,21 @@ def test_action_mask_has_canonical_shape(tiny_source_tree: Path) -> None:
 
 
 def test_step_produces_nonzero_reward_when_action_changes_graph() -> None:
-    """Phase-2 stub _apply_action records non-NOOP actions in history but
-    leaves the graph untouched, so reward == 0.0. Phase-3 TODO: flip the
-    reward assertion to ``!= 0.0`` once apply_action truly mutates — that
-    becomes the end-to-end proof src.services.metrics drives R_t.
+    """Phase-3 end-to-end: SPLIT actions mutate the graph (via real refactor
+    ops) → metrics deltas → at least one non-zero reward across a short
+    SPLIT sweep over the sample_skills graph.
     """
     env = SkillsGraphEnv(SAMPLE_SKILLS_DIR, seed=42)
-    n, e = env.graph.number_of_nodes(), env.graph.number_of_edges()
-    assert n >= 10, f"sample_skills graph must have >=10 nodes; got {n}"
+    n0 = env.graph.number_of_nodes()
+    assert n0 >= 10, f"sample_skills graph must have >=10 nodes; got {n0}"
     env.reset()
-    _, reward, _, info = env.step(Action(kind=ActionKind.SPLIT, primary=0, secondary=0))
-    assert (env.graph.number_of_nodes(), env.graph.number_of_edges()) == (n, e), "stub: graph untouched"
-    assert reward == 0.0, f"Phase-2 stub ⇒ zero reward; got {reward}. Phase-3 flips to !=0.0."
-    assert info["history_len"] == 1, "SPLIT action must be recorded in history"
+    rewards: list[float] = []
+    for primary in range(8):  # 8 SPLITs over distinct nodes
+        _, reward, _, info = env.step(Action(kind=ActionKind.SPLIT, primary=primary, secondary=0))
+        rewards.append(reward)
+    assert env.graph.number_of_nodes() > n0, "SPLIT must add shadow nodes"
+    assert any(r != 0.0 for r in rewards), f"expected at least one non-zero reward; got {rewards}"
+    assert info["history_len"] == 8, "all 8 SPLIT actions must be recorded in history"
 
 
 def test_compute_reward_uses_canonical_coeffs(monkeypatch: pytest.MonkeyPatch) -> None:

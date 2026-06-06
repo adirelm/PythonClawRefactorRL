@@ -90,7 +90,7 @@ rather than masking them):
 | **0** | **Bootstrap** (repo skeleton, pyproject, uv, ruff, pytest, CI, ≤150-LOC guardrail, docs/ scaffold, ADR-001/002 stubs) | ✅ | `pyproject.toml`, `.github/workflows/ci.yml`, `docs/PRD.md`, `docs/PLAN.md`, `docs/adr/ADR-001-pythonclaw-shim-boundary.md`, `docs/adr/ADR-002-graphify-adapter.md`, commit Phase 0 bootstrap |
 | 1 | §2.1 GRAPHIFY + Obsidian (graph builder, adapter, NetworkX + pyvis screenshots, Obsidian hero shots) | 🟡 in-progress (T1.1–T1.6 ✅, T01-05/T01-06/T01-07 pending) | `src/graphify/` (+ `src/graphify/adapter.py`), `results/graphify_output.gpickle`, `results/vault/`, `results/figures/obsidian_before.png` (Phase 3+: dedicated `results/graphs/` PNG/HTML renders + `results/obsidian/hero_{1,2,3}.png` deferred — current artefact set covers F1/F2/F3 acceptance), commit Phase 1 |
 | 2 | §2.2 Environment (state/action design, refactor env, reward = α·ΔModularity + β·ΔCohesion − γ·Coupling_Penalty + P_skills, masking) | ✅ | `src/env/skills_graph_env.py`, `src/env/state.py`, `src/env/actions.py`, `src/env/action_mask.py`, `src/env/reward.py`, `src/services/metrics/{modularity,cohesion,coupling}.py`, `src/services/centrality.py`, `docs/STATE_DESIGN.md`, `docs/ACTION_DESIGN.md`, commit `ec1288a` (impl) + `1c317ef` (metrics gap close) |
-| 3 | §2.3 PPO + GAE (policy net, GAE advantage, clipped surrogate, SB3 spike + fallback) | ⬜ | `src/training/ppo_trainer.py`, `src/training/gae.py`, `src/policy/policy_net.py`, `docs/adr/ADR-008-sb3-variable-v-buffer.md`, commit Phase 3 |
+| 3 | §2.3 PPO + GAE (policy net, GAE advantage, clipped surrogate, SB3 spike + fallback) | ✅ | `src/services/ppo_trainer.py`, `src/services/gae_buffer.py`, `src/model/policy_net.py`, `src/model/encoder.py`, `scripts/train_ppo.py`, `results/figures/obsidian_after.png`, `results/figures/betweenness_ci.png`, `results/data/betweenness_table.csv`, `docs/adr/ADR-008-sb3-variable-v-buffer.md`, commit `<phase3-commit>` |
 | 4 | §2.4 Cost + ablations + essay (tiktoken cost panel, α/β/γ/P_skills ablation matrix ≥5 seeds, ΔReward summary, 2500–3000 word essay) | ⬜ | `docs/COST_ANALYSIS.md` (D8), `results/ablations/`, `docs/ANALYSIS.md` (D7 ΔReward), `docs/ESSAY.md`, `notebooks/analysis.ipynb`, commit Phase 4 |
 
 Phase gates (all must be green before a phase is marked ✅):
@@ -198,11 +198,31 @@ bundle that gates Phase 2 closure.
 | T02-13 | Add `tests/architecture/test_betweenness_call_count.py` — patch `networkx.betweenness_centrality` and assert it is invoked **exactly twice per seed** (training-start + training-end) across ≥5 seeds per brief §2.2 + ADR-006 | Adding betweenness-call-count architecture test | 2 | +80 test | §2.2-betweenness,ADR-006 | Test fails if call count per seed ≠ 2 |
 | T02-14 | Add `tests/architecture/test_config_refs.py` — walk docs/ and src/ for any reference to the legacy split-config filenames (state/action/reward `.yaml`); assert all references use `config/config.yaml#<block>` notation (CLAUDE.md §4 single-source-of-truth); the test file itself owns the literal stale strings in its `STALE_REFS` tuple | Adding config-refs architecture test | 2 | +60 test | CLAUDE.md§4 | Test fails on any stale split-config filename |
 
-## §3.3 Phase 3 — §2.3 PPO + GAE (⬜ pending)
+## §3.3 Phase 3 — §2.3 PPO + GAE (✅ workflow-level T3.1–T3.9 landed)
 
 Goal: implement PPO with GAE on the refactor env. Spike Stable-Baselines3
 for 2h; if SB3 buffer doesn't match our action-mask shape, fall back to
 custom padding + masking.
+
+### §3.3.0 Phase 3 workflow-level tasks (T3.1–T3.9 ✅ landed)
+
+The Phase 3 build workflow tracks these nine top-level deliverables, all
+of which landed in this workflow run. The fine-grained T03-NN rows below
+remain the per-acceptance-test surface; T3.x rows are the workflow-level
+bundle that gates Phase 3 closure.
+
+| id | content | status | evidence pointer |
+|----|---------|--------|------------------|
+| T3.1 | Refactor ops module (split_module / merge_modules / rewire_edge / noop) | ✅ | `src/env/refactor_ops.py`, commit `<phase3-commit>` |
+| T3.2 | `apply_action` wired in `SkillsGraphEnv` — step contract `(state, reward, done, info) = env.step(action)` | ✅ | `src/env/skills_graph_env.py`, commit `<phase3-commit>` |
+| T3.3 | GAE buffer — λ=0.95 (FIXED), γ=0.99 advantage computation per Schulman et al. 2016 | ✅ | `src/services/gae_buffer.py`, commit `<phase3-commit>` |
+| T3.4 | PPO trainer — clipped surrogate ε=0.2 (FIXED), value loss, entropy bonus; wraps our 4-tuple `SkillsGraphEnv` directly (NO gymnasium) | ✅ | `src/services/ppo_trainer.py`, commit `<phase3-commit>` |
+| T3.5 | Policy net — actor-critic torso, Categorical head, value head V_φ(s) | ✅ | `src/model/policy_net.py`, commit `<phase3-commit>` |
+| T3.6 | Encoder — GraphSAGE primary / MLP fallback (V_max=512 FALLBACK only per ADR-004 + ADR-008) | ✅ | `src/model/encoder.py`, commit `<phase3-commit>` |
+| T3.7 | Train script — end-to-end PPO rollout on `SkillsGraphEnv` across 5 seeds {42, 7, 123, 314, 271} | ✅ | `scripts/train_ppo.py`, commit `<phase3-commit>` |
+| T3.8 | Obsidian after-refactor hero shot (closes F10 partial → ✅) | ✅ | `results/figures/obsidian_after.png`, commit `<phase3-commit>` |
+| T3.9 | Betweenness CI chart + per-seed table — mean ± std + 95% CI across 5 seeds × 2 calls/seed | ✅ | `results/figures/betweenness_ci.png`, `results/data/betweenness_table.csv`, commit `<phase3-commit>` |
+
 
 | id | content | activeForm | phase | LOC-Δ | req | acceptance |
 |----|---------|------------|-------|-------|-----|------------|
