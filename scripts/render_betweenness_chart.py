@@ -42,6 +42,7 @@ TOP_N = 10
 MIN_N_FOR_CI = 2  # Student's t needs at least dof=1 -> n>=2
 CSV_HEADER = [
     "node_id",
+    "n_seeds",
     "mean_before",
     "std_before",
     "ci95_before",
@@ -105,6 +106,7 @@ def _per_node_stats(seeds: list[dict], node_id: str) -> dict[str, float]:
     mean_b, mean_a = float(np.mean(before_vals)), float(np.mean(after_vals))
     return {
         "node_id": node_id,
+        "n_seeds": len(seeds),
         "mean_before": mean_b,
         "std_before": float(np.std(before_vals, ddof=1)) if len(before_vals) > 1 else 0.0,
         "ci95_before": _ci95_halfwidth(before_vals),
