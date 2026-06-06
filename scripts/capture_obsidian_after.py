@@ -1,11 +1,34 @@
 """CLI: render the post-PPO refactored Skills graph (brief §3 "after" shot).
 
 Mirrors :mod:`scripts.capture_obsidian_stub` but, instead of loading the
-baseline pickle, it replays the trained PPO policy for one episode at
-``seed=42`` and dumps the *final* refactored graph as
+baseline pickle, it replays the trained PPO policy at ``seed=42`` for a
+**mid-rollout snapshot** and dumps the resulting refactored graph to
 ``results/figures/obsidian_after.png``. Colour map, legend, and edge
 styling are identical to the "before" shot so the two images are
-diff-able by eye. Node-size formula is the Phase-1 cap ``min(LOC*8, 500)``.
+diff-able by eye. Node-size formula is the Phase-1 cap
+``min(LOC*8, 500)``.
+
+Why mid-rollout, not final?
+---------------------------
+At ``seed=42`` the trained policy keeps simplifying the graph past the
+point where the picture is legible: by the terminal step the graph
+collapses to a single connected pair (~2 nodes, 1 edge) and the
+spring-layout output renders as a lone L3 dot, which reads either as a
+broken figure or as the policy having destroyed all structure. Neither
+is the message we want to communicate — the policy is doing *less*
+destructive work than that summary implies; the terminal frame just
+happens to be degenerate.
+
+Instead we snapshot after ``_SNAPSHOT_STEPS`` rollout steps (currently
+``32``, half of ``DEFAULT_MAX_EPISODE_STEPS=64``). This frame preserves
+all three layers (L1 / L2 / L3) and ≥5 nodes with ≥3 edges, so the
+viewer can compare topology against ``obsidian_before.png`` without
+losing the message that the policy *has* aggressively merged /
+rewired (node count drops from ~30 → 12, edges from ~10 → 8).
+
+Determinism: ``PolicyNet.get_action`` samples from a Categorical, so
+runs must be seeded. We call ``torch.manual_seed(_SEED)`` before the
+rollout so the snapshot is reproducible byte-for-byte.
 """
 
 from __future__ import annotations
@@ -36,14 +59,19 @@ _DEFAULT_CHECKPOINT = _REPO_ROOT / "results" / "training" / "seed_42" / "checkpo
 _DEFAULT_PNG = _REPO_ROOT / "results" / "figures" / "obsidian_after.png"
 _DEFAULT_SOURCE = _REPO_ROOT / "src" / "pythonclaw_shim" / "sample_skills"
 _SEED = 42
+_SNAPSHOT_STEPS = 32  # Mid-rollout: preserves ≥5 nodes + ≥3 edges across L1/L2/L3.
 _LAYER_COLORS = {1: "lightblue", 2: "lightyellow", 3: "lightcoral", 0: "lightgrey"}
 _LAYER_LABELS = {1: "L1 metadata", 2: "L2 instructions", 3: "L3 resources", 0: "code (module/class/fn)"}
 _REL_COLORS = {"call": "#1f77b4", "import": "#ff7f0e", "inheritance": "#2ca02c"}
 _FALLBACK_COLOR = "#999999"
+_LOC_BASE_SIZE = 80
 _LOC_SCALE = 8
 _LOC_CAP = 500
 _PNG_MIN_BYTES = 1024  # anti-blank guard — a real labelled chart is well above this
-_TITLE = "PythonClaw Skills shim — refactored dependency graph (AFTER PPO trained policy)"
+_TITLE = (
+    "PythonClaw Skills shim — refactored dependency graph "
+    f"(AFTER PPO trained policy, mid-rollout @ step {_SNAPSHOT_STEPS})"
+)
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -51,6 +79,10 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--checkpoint", type=Path, default=_DEFAULT_CHECKPOINT, help="PPO checkpoint .pt")
     parser.add_argument("--output", type=Path, default=_DEFAULT_PNG, help="Output PNG path.")
     parser.add_argument("--source", type=Path, default=_DEFAULT_SOURCE, help="Skills source root.")
+    parser.add_argument(
+        "--steps", type=int, default=_SNAPSHOT_STEPS,
+        help=f"Mid-rollout step count to snapshot at (default {_SNAPSHOT_STEPS}).",
+    )
     return parser.parse_args(argv)
 
 
@@ -65,17 +97,22 @@ def _load_policy(checkpoint: Path) -> PolicyNet:
     return policy
 
 
-def _replay_episode(env: SkillsGraphEnv, policy: PolicyNet) -> None:
-    """Run one greedy-policy episode in-place on ``env`` (uses action mask)."""
+def _replay_snapshot(env: SkillsGraphEnv, policy: PolicyNet, steps: int) -> None:
+    """Run ``steps`` greedy-policy steps in-place on ``env`` (uses action mask).
+
+    Stops early on ``done`` to avoid degenerate terminal frames.
+    """
+    torch.manual_seed(_SEED)  # determinism for Categorical.sample inside get_action
     state, _ = env.reset()
-    done = False
-    while not done:
+    for _ in range(steps):
         with torch.no_grad():
             x_padded, mask = _state_to_padded(state)
             logits, _ = policy(x_padded, mask)
             action_mask = env.get_action_mask().unsqueeze(0)
             action_idx, _ = policy.get_action(logits, action_mask)
         state, _reward, done, _info = env.step(global_index_to_action(int(action_idx.item())))
+        if done:
+            break
 
 
 def _layer_key(raw: object) -> int:
@@ -93,7 +130,7 @@ def _styles(graph: nx.DiGraph) -> tuple[list[str], list[float], list[str]]:
         _LAYER_COLORS.get(_layer_key(graph.nodes[n].get("layer")), _FALLBACK_COLOR) for n in graph.nodes
     ]
     node_s = [
-        min(_LOC_SCALE * float(graph.nodes[n].get("LOC", 0) or 0), _LOC_CAP) or _LOC_SCALE
+        min(_LOC_BASE_SIZE + _LOC_SCALE * float(graph.nodes[n].get("LOC", 0) or 0), _LOC_CAP)
         for n in graph.nodes
     ]
     edge_c = [
@@ -157,8 +194,12 @@ def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     env = SkillsGraphEnv(args.source, seed=_SEED)
     policy = _load_policy(args.checkpoint)
-    _replay_episode(env, policy)
-    render(env.graph, args.output)
+    _replay_snapshot(env, policy, args.steps)
+    g = env.graph
+    print(
+        f"snapshot @ step={args.steps}: nodes={g.number_of_nodes()}, edges={g.number_of_edges()}"
+    )
+    render(g, args.output)
     _verify_png(args.output)
     print(f"Figure written to {args.output} (size={args.output.stat().st_size} B)")
     return 0
