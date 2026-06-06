@@ -22,6 +22,7 @@ from torch.distributions import Categorical
 _FEATURE_DIM_DEFAULT = 16
 _HIDDEN_DIM_DEFAULT = 64
 _ACTION_DIM_DEFAULT = 45057  # A_max — kept here to avoid src.env import cycle
+_NOOP_IDX_DEFAULT = 45056  # A_max - 1 (mirrored from src.env.actions.NOOP_INDEX)
 
 
 class PolicyNet(nn.Module):
@@ -104,7 +105,17 @@ class PolicyNet(nn.Module):
         """
         if logits.shape != action_mask.shape:
             raise ValueError(f"logits {tuple(logits.shape)} != action_mask {tuple(action_mask.shape)}")
-        masked = logits.masked_fill(~action_mask, float("-inf"))
+        # Defensive NOOP fallback: if any batch row has an all-False mask, force
+        # the NOOP slot True there. An all-(-inf) row would give Categorical a
+        # NaN distribution and hang/explode the sampler (observed on seeds
+        # 123/314/271 with degenerate graphs). Huang & Ontañón (2022) §3 still
+        # holds: NOOP is the always-legal escape slot per ACTION_DESIGN §2.4.
+        safe_mask = action_mask
+        empty_rows = (~action_mask).all(dim=-1)
+        if bool(empty_rows.any()):
+            safe_mask = action_mask.clone()
+            safe_mask[..., _NOOP_IDX_DEFAULT] = safe_mask[..., _NOOP_IDX_DEFAULT] | empty_rows
+        masked = logits.masked_fill(~safe_mask, float("-inf"))
         dist = Categorical(logits=masked)
         action_idx = dist.sample()
         log_prob = dist.log_prob(action_idx)
