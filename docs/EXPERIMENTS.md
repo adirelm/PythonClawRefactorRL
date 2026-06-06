@@ -15,7 +15,7 @@
 | P1-E2 | <hypothesis> | <setup> | <result> | <verdict> |
 | P2-E1 | <hypothesis> | <setup> | <result> | <verdict> |
 | P2-E2 | <hypothesis> | <setup> | <result> | <verdict> |
-| P3-E1 | 5-seed PPO smoke | 2 of 5 done; 123/314/271 hung on Categorical(-inf); see Known gaps; rerun after R1 hang fix | INCONCLUSIVE_PENDING_RETRAIN |
+| P3-E1 | 5-seed PPO smoke | Original `71f0213`: 2/5 seeds done (42, 7); 123/314/271 hung on `Categorical(-inf)`. Rework R1 `5dd14ca` landed NOOP-slot defensive fallback. Rework R2 retrain (`uv run scripts/train_ppo.py --total-steps 1000`) stopped by run-window hook mid-run: only seed_42 completed (final_reward=-0.44, btw_calls=2); seed_7 mid-rollout; 123/314/271 never started. | 1/5 seeds on disk post-R2; no `aggregate.json`; R1 NOOP fix UNVALIDATED on hang-prone seeds; INCONCLUSIVE_RETRAIN_STILL_OWED (resolution: re-run retrain to completion so seeds 7/123/314/271 land and aggregate regenerates with num_seeds=5, dof=4) |
 | P3-E2 | <hypothesis> | <setup> | <result> | <verdict> |
 | P3-E3 | <hypothesis> | <setup> | <result> | <verdict> |
 | P4-E1 | <hypothesis> | <setup> | <result> | <verdict> |

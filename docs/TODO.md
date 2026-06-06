@@ -219,7 +219,7 @@ bundle that gates Phase 3 closure.
 | T3.4 | PPO trainer — clipped surrogate ε=0.2 (FIXED), value loss, entropy bonus; wraps our 4-tuple `SkillsGraphEnv` directly (NO gymnasium) | ✅ | `src/services/ppo_trainer.py`, commit `71f0213` |
 | T3.5 | Policy net — actor-critic torso, Categorical head, value head V_φ(s) | ✅ | `src/model/policy_net.py`, commit `71f0213` |
 | T3.6 | Encoder — GraphSAGE primary / MLP fallback (V_max=512 FALLBACK only per ADR-004 + ADR-008) | ✅ | `src/model/encoder.py`, commit `71f0213` |
-| T3.7 | Train script — end-to-end PPO rollout on `SkillsGraphEnv` across 5 seeds {42, 7, 123, 314, 271} | 🟡 in-progress | `scripts/train_ppo.py`, commit `71f0213` captured seeds 42 + 7 only; seeds 123 / 314 / 271 hung on `Categorical(logits=all_-inf)` NaN-explosion in `policy_net.get_action` when action_mask went all-False on a degenerate post-rollout graph. R1 (NOOP-slot pin + uniform-on-NOOP fallback) + R2 (5-seed retrain) in flight. See **Known gaps** below. |
+| T3.7 | Train script — end-to-end PPO rollout on `SkillsGraphEnv` across 5 seeds {42, 7, 123, 314, 271} | 🟡 in-progress | `scripts/train_ppo.py`. Original commit `71f0213` captured seeds 42 + 7 only; seeds 123 / 314 / 271 hung on `Categorical(logits=all_-inf)` NaN-explosion in `policy_net.get_action` when action_mask went all-False on a degenerate post-rollout graph. Phase-3-rework R1 landed defensive NOOP-slot pin in commit `5dd14ca`. R2 5-seed retrain RAN but the run-window stop hook fired mid-run: only seed_42 completed (final_reward=-0.44, btw_calls=2). seed_7 was mid-rollout; seeds 123/314/271 never started. On-disk state: `results/training/seed_42/` only; no `aggregate.json`. R1 fix is believed correct but UNVALIDATED on hang-prone seeds (123/314/271 did not execute under R1). See **Known gaps** below. |
 | T3.8 | Obsidian after-refactor hero shot (closes F10 partial → ✅) | ✅ | `results/figures/obsidian_after.png`, commit `71f0213` |
 | T3.9 | Betweenness CI chart + per-seed table — mean ± std + 95% CI across 5 seeds × 2 calls/seed | ✅ | `results/figures/betweenness_ci.png`, `results/data/betweenness_table.csv`, commit `71f0213` |
 
@@ -242,9 +242,10 @@ bundle that gates Phase 3 closure.
 ## Known gaps (Phase 3 rework, 2026-06-07)
 
 - **5-seed hang (commit 71f0213)**: seeds 123 / 314 / 271 hung in the 5000-step PPO run because the action_mask went all-False on a degenerate post-rollout graph and `Categorical(logits=all_-inf)` NaN-explodes. Symptom in V5 of Phase 3 validation.
-- **Doc-vs-artifact lie (commit 71f0213)**: aggregate.json honestly reported num_seeds=2 + chart title honestly said "across 2 seeds" — but TRACE F10 / TODO T3.7 were marked "done" claiming 5. Demoted in this rework.
-- **Fix in flight**: NOOP slot pinned True in action_mask + uniform-on-NOOP fallback in get_action (R1 of rework).
-- **Retrain in flight**: 5-seed PPO re-runs after R1 lands; aggregate + chart + CSV regenerated with num_seeds=5 + dof=4 (R2 of rework).
+- **Doc-vs-artifact lie (commit 71f0213)**: aggregate.json honestly reported num_seeds=2 + chart title honestly said "across 2 seeds" — but TRACE F10 / TODO T3.7 were marked "done" claiming 5. Demoted in `6f8b6d6` (R3 of rework).
+- **R1 fix landed (commit `5dd14ca`)**: defensive NOOP fallback in `PolicyNet.get_action` — if any batch row has an all-False action_mask, the NOOP slot (idx 45056) is forced True before `masked_fill`, preventing `Categorical(-inf)` NaN. R1 is believed correct but **unvalidated on the hang-prone seeds (123/314/271)** because the R2 retrain did not reach them (see next bullet).
+- **R2 5-seed retrain INCOMPLETE**: launched `uv run scripts/train_ppo.py --total-steps 1000` for all 5 seeds. The run-window stop hook fired before completion. On-disk evidence post-R2: `results/training/seed_42/{metrics.json,checkpoint.pt,rewards.csv}` only — seed_42 completed (final_reward=-0.44, betweenness_calls=2). seed_7 was mid-rollout when stopped; seeds 123/314/271 never started under the R1 fix. No `aggregate.json` was written. `results/training/verdicts/` is empty.
+- **Current honest status**: 1 of 5 seeds on disk post-R2 retrain. R1 fix UNVALIDATED on hang-prone seeds. T3.7 / F10 remain 🟡 in-progress. Resolution requires re-running the retrain to completion (seeds 7, 123, 314, 271 still owe artifacts; only then can `aggregate.json` regenerate with num_seeds=5 + dof=4 and only then can the 5dd14ca NOOP fix be claimed validated end-to-end).
 
 ## §3.4 Phase 4 — §2.4 Cost + ablations + essay (⬜ pending)
 
