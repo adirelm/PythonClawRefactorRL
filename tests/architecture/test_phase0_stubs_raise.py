@@ -4,11 +4,12 @@ This test exercises every still-stubbed phase entrypoint so that
 (a) coverage reports honest %, and (b) when Phase N+ lands a real
 implementation, the test fails — forcing us to update the contract.
 
-Phase 1 has landed: ``LocalGraphify.build / .load`` are real impls now, so
-their assertions check real behavior (empty-tree → empty graph; missing
-pickle → ``FileNotFoundError`` with informative message) rather than
-``NotImplementedError``. Phases 4–6 stubs (train / evaluate / run_ablation)
-remain.
+Phase 1 wiring complete for ``RefactorSDK.build_skills_graph`` (delegates to
+``LocalGraphify`` per ADR-002) — the assertion now exercises the real impl
+against the bundled ``sample_skills`` corpus (30 nodes). ``LocalGraphify.build
+/ .load`` are also real impls (empty-tree → empty graph; missing pickle →
+``FileNotFoundError`` with informative message). Phases 4–6 stubs
+(``train`` / ``evaluate`` / ``run_ablation``) remain.
 """
 
 from __future__ import annotations
@@ -22,10 +23,12 @@ from src.graphify.local_impl import LocalGraphify
 from src.sdk.sdk import RefactorSDK
 
 
-def test_refactorsdk_build_skills_graph_raises() -> None:
+def test_refactorsdk_build_skills_graph_returns_digraph() -> None:
+    """Phase-1 wiring: SDK delegates to LocalGraphify and returns a populated DiGraph."""
     sdk = RefactorSDK()
-    with pytest.raises(NotImplementedError, match="Phase 1"):
-        sdk.build_skills_graph()
+    graph = sdk.build_skills_graph()
+    assert isinstance(graph, nx.DiGraph)
+    assert graph.number_of_nodes() >= 10  # sample_skills corpus has 30 nodes
 
 
 def test_refactorsdk_train_raises() -> None:

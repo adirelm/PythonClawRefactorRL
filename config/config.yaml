@@ -9,10 +9,8 @@ ppo:
   vf_coef: 0.5
   ent_coef: 0.01
   max_grad_norm: 0.5
-
-gae:
-  lambda: 0.95  # FIXED by ex04 §2.3 — do not tune
-  gamma: 0.99
+  gae_lambda: 0.95  # FIXED by ex04 §2.3 — do not tune (PRD-GAE FR-4; SB3 idiom)
+  gamma: 0.99  # GAE discount factor (PRD-GAE FR-5; SB3 idiom)
 
 reward:
   alpha: 1.0  # ΔModularity weight

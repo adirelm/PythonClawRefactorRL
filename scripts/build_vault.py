@@ -7,9 +7,9 @@ downstream reuse, and renders an Obsidian-compatible markdown vault via
 ``src/pythonclaw_shim/sample_skills`` source and ``results/`` outputs so
 ``uv run python scripts/build_vault.py`` is a no-arg one-shot pipeline.
 
-Note: ``LocalGraphify.build`` is a Phase-0 stub that raises
-``NotImplementedError`` until Phase 1+ lands the AST walker; this script
-defines the orchestration so the call-site is wired once the impl arrives.
+Runs LocalGraphify().build() (Phase 1+) to extract the dependency graph
+from the Skills shim source tree, then writes an Obsidian-compatible
+Markdown vault via VaultWriter.
 """
 
 from __future__ import annotations

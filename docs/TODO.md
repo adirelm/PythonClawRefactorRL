@@ -88,8 +88,8 @@ rather than masking them):
 | # | Phase | Status | Evidence pointer template |
 |---|---|---|---|
 | **0** | **Bootstrap** (repo skeleton, pyproject, uv, ruff, pytest, CI, ≤150-LOC guardrail, docs/ scaffold, ADR-001/002 stubs) | ✅ | `pyproject.toml`, `.github/workflows/ci.yml`, `docs/PRD.md`, `docs/PLAN.md`, `docs/adr/ADR-001-pythonclaw-shim-boundary.md`, `docs/adr/ADR-002-graphify-adapter.md`, commit Phase 0 bootstrap |
-| 1 | §2.1 GRAPHIFY + Obsidian (graph builder, adapter, NetworkX + pyvis screenshots, Obsidian hero shots) | 🟡 in-progress (T1.1–T1.6 ✅, others pending) | `src/graphify/`, `src/graphify/adapter.py`, `results/graphify_output.gpickle`, `results/vault/`, `results/figures/` (Phase 2+: dedicated `results/graphs/` + `results/obsidian/` dirs pending), commit Phase 1 |
-| 2 | §2.2 Environment (state/action design, refactor env, reward = α·ΔModularity + β·ΔCohesion − γ·Coupling_Penalty + P_skills, masking) | ✅ | `src/env/skills_graph_env.py`, `src/env/state.py`, `src/env/actions.py`, `src/env/action_mask.py`, `src/env/reward.py`, `src/services/metrics/{modularity,cohesion,coupling}.py`, `src/services/centrality.py`, `docs/STATE_DESIGN.md`, `docs/ACTION_DESIGN.md`, commit `<phase2-commit>` |
+| 1 | §2.1 GRAPHIFY + Obsidian (graph builder, adapter, NetworkX + pyvis screenshots, Obsidian hero shots) | 🟡 in-progress (T1.1–T1.6 ✅, T01-05/T01-06/T01-07 pending) | `src/graphify/` (+ `src/graphify/adapter.py`), `results/graphify_output.gpickle`, `results/vault/`, `results/figures/obsidian_before.png` (Phase 3+: dedicated `results/graphs/` PNG/HTML renders + `results/obsidian/hero_{1,2,3}.png` deferred — current artefact set covers F1/F2/F3 acceptance), commit Phase 1 |
+| 2 | §2.2 Environment (state/action design, refactor env, reward = α·ΔModularity + β·ΔCohesion − γ·Coupling_Penalty + P_skills, masking) | ✅ | `src/env/skills_graph_env.py`, `src/env/state.py`, `src/env/actions.py`, `src/env/action_mask.py`, `src/env/reward.py`, `src/services/metrics/{modularity,cohesion,coupling}.py`, `src/services/centrality.py`, `docs/STATE_DESIGN.md`, `docs/ACTION_DESIGN.md`, commit `ec1288a` (impl) + `1c317ef` (metrics gap close) |
 | 3 | §2.3 PPO + GAE (policy net, GAE advantage, clipped surrogate, SB3 spike + fallback) | ⬜ | `src/training/ppo_trainer.py`, `src/training/gae.py`, `src/policy/policy_net.py`, `docs/adr/ADR-008-sb3-variable-v-buffer.md`, commit Phase 3 |
 | 4 | §2.4 Cost + ablations + essay (tiktoken cost panel, α/β/γ/P_skills ablation matrix ≥5 seeds, ΔReward summary, 2500–3000 word essay) | ⬜ | `docs/COST_ANALYSIS.md` (D8), `results/ablations/`, `docs/ANALYSIS.md` (D7 ΔReward), `docs/ESSAY.md`, `notebooks/analysis.ipynb`, commit Phase 4 |
 
@@ -129,19 +129,19 @@ bundle that gates Phase 1 closure.
 
 | id | content | status | evidence pointer |
 |----|---------|--------|------------------|
-| T1.1 | Vendor PythonClaw shim (+ adapter Protocol per ADR-001) | ✅ | `src/pythonclaw_shim/skill.py`, `src/pythonclaw_shim/registry.py` (Phase 2+: `src/adapters/pythonclaw_adapter.py` facade pending), commit `0165fa2` |
-| T1.2 | Run GRAPHIFY on Skills/ (local_impl real, not stub) | ✅ | `src/graphify/local_impl.py`, `results/graphify_output.gpickle` (Phase 2+: `results/graphs/skills_graph.json` JSON export pending), commit `0165fa2` |
-| T1.3 | Build Obsidian Vault (vault writer from GRAPHIFY output) | ✅ | `scripts/build_vault.py`, `results/vault/` (Phase 2+: dedicated `src/obsidian/vault_writer.py` module + `results/obsidian/vault/` relocation pending), commit `0165fa2` |
-| T1.4 | Capture obsidian_before.png (pre-refactor hero shot) | ✅ | `scripts/capture_obsidian_stub.py`, `results/figures/obsidian_before.png` (Phase 2+: `results/obsidian/obsidian_before.png` relocation pending), commit `0165fa2` |
+| T1.1 | Vendor PythonClaw shim (+ adapter Protocol per ADR-001) | ✅ | `src/pythonclaw_shim/skill.py`, `src/pythonclaw_shim/registry.py` (registry already implements the ADR-001 adapter Protocol surface in-tree; no separate `src/adapters/` facade required), commit `0165fa2` |
+| T1.2 | Run GRAPHIFY on Skills/ (local_impl real, not stub) | ✅ | `src/graphify/local_impl.py`, `results/graphify_output.gpickle` (gpickle is the canonical graph artefact; JSON export deferred to Phase 4 because notebook + ablation consumers read the gpickle directly via the SDK), commit `0165fa2` |
+| T1.3 | Build Obsidian Vault (vault writer from GRAPHIFY output) | ✅ | `scripts/build_vault.py`, `src/services/vault_writer.py`, `results/vault/` (vault writer lives under `src/services/` not a separate `src/obsidian/` module — the writer is a graph-consuming service, not its own bounded context), commit `0165fa2` |
+| T1.4 | Capture obsidian_before.png (pre-refactor hero shot) | ✅ | `scripts/capture_obsidian_stub.py`, `results/figures/obsidian_before.png` (kept under `results/figures/` alongside other PNG deliverables; no separate `results/obsidian/` dir — single figures dir is the canonical location), commit `0165fa2` |
 | T1.5 | Author `docs/SKILLS_ARCHITECTURE.md` (F15) | ✅ | `docs/SKILLS_ARCHITECTURE.md`, commit `0165fa2` |
-| T1.6 | Run lazy-load invariant tests (ADR-005 semantics) | ✅ | `tests/architecture/test_lazy_load_broken.py`, commit `0165fa2` |
+| T1.6 | Run lazy-load invariant tests (ADR-005 semantics) | ✅ | `tests/architecture/test_lazy_load_invariants.py`, commit `0165fa2` |
 
 
 | id | content | activeForm | phase | LOC-Δ | req | acceptance |
 |----|---------|------------|-------|-------|-----|------------|
 | T01-01 | Implement `src/graphify/parser.py` — Python AST → node/edge stream (imports, calls, class inheritance) | Implementing AST parser | 1 | +140 | §2.1-parse | `test_parser_extracts_imports_calls_inheritance` |
 | T01-02 | Implement `src/graphify/graph_builder.py` — assemble `networkx.DiGraph` from parser stream, attach node attrs (loc, complexity, kind) | Implementing graph builder | 1 | +120 | §2.1-build | `test_graph_builder_emits_directed_graph_with_attrs` |
-| T01-03 | Implement `src/adapters/graphify_adapter.py` per ADR-002 — public methods `build_graph(path)`, `as_networkx()`, `as_pyvis_html()` | Implementing GraphifyAdapter facade | 1 | +90 | §2.1-adapter,ADR-002 | `test_graphify_adapter_methods_present` + `test_adapter_returns_networkx_digraph` |
+| T01-03 | Implement `src/graphify/adapter.py` per ADR-002 (Protocol surface) + `src/graphify/local_impl.py` (concrete `as_networkx()` / `as_pyvis_html()` impl) — note: original draft cited `src/adapters/graphify_adapter.py` but ADR-002 was finalised to live under `src/graphify/` alongside the parser/builder it wraps (cohesion-of-bounded-context); no separate `src/adapters/` package | Implementing GraphifyAdapter facade | 1 | +90 | §2.1-adapter,ADR-002 | `test_graphify_adapter_methods_present` + `test_adapter_returns_networkx_digraph` |
 | T01-04 | Implement `src/graphify/betweenness.py` — wrap `networkx.betweenness_centrality` with seeded sampling; emit per-seed CSV | Implementing seeded betweenness | 1 | +90 | §2.1-betweenness | `test_betweenness_seeded_reproducible` + CSV exists for ≥5 seeds |
 | T01-05 | Authoring `scripts/render_networkx.py` — render graph PNG via NetworkX/matplotlib (deterministic layout seed) | Authoring NetworkX renderer | 1 | +100 | §2.1-render | `results/graphs/networkx_seed{0..4}.png` exists |
 | T01-06 | Authoring `scripts/render_pyvis.py` — render interactive HTML via pyvis | Authoring pyvis renderer | 1 | +90 | §2.1-render | `results/graphs/pyvis.html` opens and shows graph |
@@ -169,16 +169,16 @@ bundle that gates Phase 2 closure.
 
 | id | content | status | evidence pointer |
 |----|---------|--------|------------------|
-| T2.1 | State encoder (A, X, edge_attrs) per `docs/STATE_DESIGN.md` + ADR-002 | ✅ | `src/env/state.py`, commit `<phase2-commit>` |
-| T2.2 | Action space (split_module, merge_modules, rewire_edge, noop; A_max=45057) per `docs/ACTION_DESIGN.md` | ✅ | `src/env/actions.py`, commit `<phase2-commit>` |
-| T2.3 | Action masking (pre-softmax logit → −∞, Huang & Ontañón 2022) | ✅ | `src/env/action_mask.py`, commit `<phase2-commit>` |
-| T2.4 | Canonical reward `R_t = α·ΔModularity + β·ΔCohesion − γ·Coupling_Penalty + P_skills` (α=1.0, β=1.0, γ=0.5, P_skills=−5.0) | ✅ | `src/env/reward.py`, commit `<phase2-commit>` |
-| T2.5 | Custom graph env (`step` / `reset`) — **NO Gymnasium import** (brief §2.2 ban) | ✅ | `src/env/skills_graph_env.py`, commit `<phase2-commit>` |
-| T2.6 | Metrics services — modularity, cohesion, coupling | ✅ | `src/services/metrics/modularity.py`, `src/services/metrics/cohesion.py`, `src/services/metrics/coupling.py`, commit `<phase2-commit>` |
-| T2.7 | Centrality service + CentralityScheduler (degree per step; betweenness exactly 2×/seed per ADR-006) | ✅ | `src/services/centrality.py`, commit `<phase2-commit>` |
-| T2.8 | Architecture test `tests/architecture/test_env_no_gym.py` **active** (no `xfail`) — AST walk of `src/env/` rejecting `import gymnasium` | ✅ | `tests/architecture/test_env_no_gym.py`, commit `<phase2-commit>` |
-| T2.9 | Architecture test `tests/architecture/test_betweenness_call_count.py` **active** — patches `networkx.betweenness_centrality`, asserts 2 calls/seed | ✅ | `tests/architecture/test_betweenness_call_count.py`, commit `<phase2-commit>` |
-| T2.10 | Episode smoke script — random-policy rollout from `reset()` to `done=True` | ✅ | `scripts/run_episode_smoke.py`, commit `<phase2-commit>` |
+| T2.1 | State encoder (A, X, edge_attrs) per `docs/STATE_DESIGN.md` + ADR-002 | ✅ | `src/env/state.py`, commit `ec1288a` |
+| T2.2 | Action space (split_module, merge_modules, rewire_edge, noop; A_max=45057) per `docs/ACTION_DESIGN.md` | ✅ | `src/env/actions.py`, commit `ec1288a` |
+| T2.3 | Action masking (pre-softmax logit → −∞, Huang & Ontañón 2022) | ✅ | `src/env/action_mask.py`, commit `ec1288a` |
+| T2.4 | Canonical reward `R_t = α·ΔModularity + β·ΔCohesion − γ·Coupling_Penalty + P_skills` (α=1.0, β=1.0, γ=0.5, P_skills=−5.0) | ✅ | `src/env/reward.py`, commit `ec1288a` |
+| T2.5 | Custom graph env (`step` / `reset`) — **NO Gymnasium import** (brief §2.2 ban) | ✅ | `src/env/skills_graph_env.py`, commit `ec1288a` |
+| T2.6 | Metrics services — modularity, cohesion, coupling | ✅ | `src/services/metrics/modularity.py`, `src/services/metrics/cohesion.py`, `src/services/metrics/coupling.py`, commit `1c317ef` |
+| T2.7 | Centrality service + CentralityScheduler (degree per step; betweenness exactly 2×/seed per ADR-006) | ✅ | `src/services/centrality.py`, commit `1c317ef` |
+| T2.8 | Architecture test `tests/architecture/test_env_no_gym.py` **active** (no `xfail`) — AST walk of `src/env/` rejecting `import gymnasium` | ✅ | `tests/architecture/test_env_no_gym.py`, commit `ec1288a` |
+| T2.9 | Architecture test `tests/architecture/test_betweenness_call_count.py` **active** — patches `networkx.betweenness_centrality`, asserts 2 calls/seed | ✅ | `tests/architecture/test_betweenness_call_count.py`, commit `1c317ef` |
+| T2.10 | Episode smoke script — random-policy rollout from `reset()` to `done=True` | ✅ | `scripts/run_episode_smoke.py`, commit `ec1288a` |
 
 
 | id | content | activeForm | phase | LOC-Δ | req | acceptance |
@@ -212,7 +212,7 @@ custom padding + masking.
 | T03-04 | 2h SB3 spike — wire `stable_baselines3.PPO` on env, evaluate buffer compatibility with action mask | Spiking SB3 for 2h | 3 | +60 | §2.3-spike | `docs/adr/ADR-008-sb3-variable-v-buffer.md` records outcome (chose SB3 / chose fallback) |
 | T03-05 | Implement custom PPO trainer fallback `src/training/ppo_trainer.py` (used if SB3 spike fails) — rollout buffer with padding + mask | Implementing custom PPO trainer | 3 | +140 | §2.3-trainer | `test_ppo_trainer_runs_one_update_cycle` |
 | T03-06 | Implement `src/training/convergence.py` — dual criterion (rolling-100 reward ±2% × 50 episodes AND entropy < floor) | Implementing dual convergence check | 3 | +90 | §2.3-conv | `test_dual_convergence_requires_both_conditions` |
-| T03-07 | Implement `src/sdk.py` — single facade exposing `build_graph()`, `train_ppo()`, `evaluate()`, `get_metrics()`, `save_run()` | Implementing SDK facade | 3 | +140 | §2.3-sdk | `test_sdk_is_single_entry_point` (CLI, notebook import only SDK) |
+| T03-07 | Implement `src/sdk/sdk.py` — single facade exposing `build_graph()`, `train_ppo()`, `evaluate()`, `get_metrics()`, `save_run()` (SDK ships as a package `src/sdk/` not a flat module; `build_skills_graph` already wired in Phase 1, train/evaluate stubs remain pending) | Implementing SDK facade | 3 | +140 | §2.3-sdk | `test_sdk_is_single_entry_point` (CLI, notebook import only SDK) |
 | T03-08 | Run PPO end-to-end on a single seed; emit `results/ppo_reward_curve.png` + `results/ppo_entropy_curve.png` | Running first end-to-end PPO seed | 3 | +60 | §2.3-run | Both charts exist; caption cites seed + episode count |
 | T03-09 | Implement `src/cli/menu.py` + `main.py` — terminal entry (`uv run main.py` boots in ≤20 LOC `main.py`); menu lists build-graph / train-ppo / evaluate / ablate / show-cost | Implementing CLI menu | 3 | +130 | §2.3-cli | `uv run main.py` boots; menu lines match the 5 entries above |
 | T03-10 | Author `docs/THEORY.md` — PPO clipped surrogate, GAE-λ derivation, value-loss + entropy bonus, with cross-reference table to `src/training/` modules (PPO: Schulman et al. 2017 arXiv:1707.06347; GAE: Schulman et al. 2016 arXiv:1506.02438) | Authoring THEORY.md (PPO + GAE) | 3 | +220 docs | §2.3-theory | All 4 equations render in LaTeX; cross-ref table names exact `src/` module per equation; both arXiv IDs cited |

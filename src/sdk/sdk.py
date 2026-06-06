@@ -1,23 +1,37 @@
 """RefactorSDK — public API surface for CLI / GUI / notebooks.
 
-This is a Phase-0 stub. Every method raises NotImplementedError; subsequent
-phases land the real implementations against the PRD-approved signatures.
+Phase-1 wiring complete for ``build_skills_graph`` (delegates to
+``LocalGraphify`` per ADR-002). ``train`` / ``evaluate`` / ``run_ablation``
+remain Phase-3/4 stubs and still raise ``NotImplementedError``.
 UIs must depend only on this class — never on src.services / src.env / src.model
 directly (CLAUDE.md §3).
 """
 
 from __future__ import annotations
 
+from pathlib import Path
+
+import networkx as nx
+
+from src.graphify.local_impl import LocalGraphify
+
+_DEFAULT_SOURCE = Path("src/pythonclaw_shim/sample_skills")
+
 
 class RefactorSDK:
-    """Single business-logic entry point. Stubbed until Phase 2."""
+    """Single business-logic entry point. Skills-graph wired in Phase 1."""
 
     def __init__(self, config_path: str | None = None) -> None:
         self.config_path = config_path
 
-    def build_skills_graph(self) -> object:
-        """Build the Skills-layer dependency graph. Implemented in Phase 1."""
-        raise NotImplementedError("RefactorSDK.build_skills_graph — Phase 1")
+    def build_skills_graph(self, source: Path | str | None = None) -> nx.DiGraph:
+        """Build the Skills-layer dependency graph via ``LocalGraphify`` (ADR-002).
+
+        Defaults to ``src/pythonclaw_shim/sample_skills`` when ``source`` is None.
+        Uses ``seed=42`` for deterministic traversal ordering.
+        """
+        src_root = Path(source) if source is not None else _DEFAULT_SOURCE
+        return LocalGraphify().build(src_root=src_root, seed=42)
 
     def train(self, seed: int) -> object:
         """Run a single PPO+GAE training session at the given seed."""
