@@ -1,0 +1,6 @@
+phase,model,input_tokens,output_tokens,chars_in,chars_out,bytes_in,bytes_out,wall_clock_sec,episodes,price_in_per_M,price_out_per_M,price_timestamp_iso,subtotal_usd,run_id
+0,claude-opus-4-7,0,3052,0,10543,0,10616,46063.0,0,15.0,75.0,2026-06-07T00:00:00Z,0.2289,phase0-a213652
+1,claude-opus-4-7,0,738,0,2737,0,2783,18247.0,0,15.0,75.0,2026-06-07T00:00:00Z,0.05535,phase1-0165fa2
+2,claude-opus-4-7,0,1146,0,4141,0,4215,49655.0,0,15.0,75.0,2026-06-07T00:00:00Z,0.08595,phase2-ec1288a
+3,claude-opus-4-7,0,2910,0,10648,0,10746,53422.0,6,15.0,75.0,2026-06-07T00:00:00Z,0.21825,phase3-71f0213
+4,claude-opus-4-7,0,533,0,1999,0,2003,17551.0,0,15.0,75.0,2026-06-07T00:00:00Z,0.039975,phase4-dbdd1a5
