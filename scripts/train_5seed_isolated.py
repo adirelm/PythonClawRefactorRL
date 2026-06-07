@@ -44,15 +44,24 @@ def _run_one_seed(seed: int, total_steps: int, timeout_s: int) -> dict:
         sys.executable,
         "-u",
         str(REPO_ROOT / "scripts" / "train_ppo.py"),
-        "--seeds", str(seed),
-        "--total-steps", str(total_steps),
+        "--seeds",
+        str(seed),
+        "--total-steps",
+        str(total_steps),
     ]
     t0 = time.perf_counter()
     try:
         with log_path.open("w", encoding="utf-8") as fh:
-            proc = subprocess.run(cmd, stdout=fh, stderr=subprocess.STDOUT, timeout=timeout_s, cwd=REPO_ROOT, check=False)
+            proc = subprocess.run(
+                cmd, stdout=fh, stderr=subprocess.STDOUT, timeout=timeout_s, cwd=REPO_ROOT, check=False
+            )
         elapsed = time.perf_counter() - t0
-        return {"seed": seed, "status": "OK" if proc.returncode == 0 else f"FAIL_rc={proc.returncode}", "elapsed_s": round(elapsed, 2), "log": str(log_path)}
+        return {
+            "seed": seed,
+            "status": "OK" if proc.returncode == 0 else f"FAIL_rc={proc.returncode}",
+            "elapsed_s": round(elapsed, 2),
+            "log": str(log_path),
+        }
     except subprocess.TimeoutExpired:
         elapsed = time.perf_counter() - t0
         return {"seed": seed, "status": "TIMEOUT", "elapsed_s": round(elapsed, 2), "log": str(log_path)}
@@ -103,13 +112,21 @@ def _rebuild_aggregate(seeds: list[int], total_steps: int) -> dict:
 
 def main() -> int:
     args = _parse_args()
-    print(f"=== Phase-3 5-seed isolated PPO ({len(args.seeds)} seeds x {args.total_steps} steps, {args.per_seed_timeout_s}s/seed budget) ===")
+    print(
+        f"=== Phase-3 5-seed isolated PPO ({len(args.seeds)} seeds x {args.total_steps} steps, {args.per_seed_timeout_s}s/seed budget) ==="
+    )
     statuses: list[dict] = []
     for seed in args.seeds:
-        print(f"[{time.strftime('%H:%M:%S')}] seed={seed} starting (timeout={args.per_seed_timeout_s}s)...", flush=True)
+        print(
+            f"[{time.strftime('%H:%M:%S')}] seed={seed} starting (timeout={args.per_seed_timeout_s}s)...",
+            flush=True,
+        )
         row = _run_one_seed(seed, args.total_steps, args.per_seed_timeout_s)
         statuses.append(row)
-        print(f"[{time.strftime('%H:%M:%S')}] seed={seed} {row['status']} elapsed={row['elapsed_s']}s log={row['log']}", flush=True)
+        print(
+            f"[{time.strftime('%H:%M:%S')}] seed={seed} {row['status']} elapsed={row['elapsed_s']}s log={row['log']}",
+            flush=True,
+        )
     aggregate = _rebuild_aggregate(args.seeds, args.total_steps)
     print("\n=== Per-seed status ===")
     for r in statuses:

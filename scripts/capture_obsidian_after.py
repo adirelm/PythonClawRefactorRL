@@ -69,7 +69,9 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--output", type=Path, default=_DEFAULT_PNG, help="Output PNG path.")
     parser.add_argument("--source", type=Path, default=_DEFAULT_SOURCE, help="Skills source root.")
     parser.add_argument(
-        "--steps", type=int, default=_SNAPSHOT_STEPS,
+        "--steps",
+        type=int,
+        default=_SNAPSHOT_STEPS,
         help=f"Mid-rollout step count to snapshot at (default {_SNAPSHOT_STEPS}).",
     )
     return parser.parse_args(argv)
@@ -110,9 +112,7 @@ def main(argv: list[str] | None = None) -> int:
     policy = _load_policy(args.checkpoint)
     _replay_snapshot(env, policy, args.steps)
     g = env.graph
-    print(
-        f"snapshot @ step={args.steps}: nodes={g.number_of_nodes()}, edges={g.number_of_edges()}"
-    )
+    print(f"snapshot @ step={args.steps}: nodes={g.number_of_nodes()}, edges={g.number_of_edges()}")
     render(g, args.output, _TITLE)
     verify_png(args.output)
     print(f"Figure written to {args.output} (size={args.output.stat().st_size} B)")

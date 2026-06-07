@@ -48,25 +48,21 @@ def _layer_key(raw: object) -> int:
 
 def _styles(graph: nx.DiGraph) -> tuple[list[str], list[float], list[str]]:
     node_c = [
-        _LAYER_COLORS.get(_layer_key(graph.nodes[n].get("layer")), _FALLBACK_COLOR)
-        for n in graph.nodes
+        _LAYER_COLORS.get(_layer_key(graph.nodes[n].get("layer")), _FALLBACK_COLOR) for n in graph.nodes
     ]
     node_s = [
         min(_LOC_BASE_SIZE + _LOC_SCALE * float(graph.nodes[n].get("LOC", 0) or 0), _LOC_CAP)
         for n in graph.nodes
     ]
     edge_c = [
-        _REL_COLORS.get(str(d.get("rel_type", "")), _FALLBACK_COLOR)
-        for _, _, d in graph.edges(data=True)
+        _REL_COLORS.get(str(d.get("rel_type", "")), _FALLBACK_COLOR) for _, _, d in graph.edges(data=True)
     ]
     return node_c, node_s, edge_c
 
 
 def _legend_handles(graph: nx.DiGraph) -> list:
     layers = sorted({_layer_key(graph.nodes[n].get("layer")) for n in graph.nodes})
-    rels = sorted(
-        {str(d.get("rel_type", "")) for _, _, d in graph.edges(data=True) if d.get("rel_type")}
-    )
+    rels = sorted({str(d.get("rel_type", "")) for _, _, d in graph.edges(data=True) if d.get("rel_type")})
     handles: list = []
     for lk in layers:
         handles.append(
