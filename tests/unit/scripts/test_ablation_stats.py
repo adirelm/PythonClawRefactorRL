@@ -23,10 +23,16 @@ sys.modules["ablation_stats"] = mod
 _SPEC.loader.exec_module(mod)
 
 
+_FIELDS = ("cell_sha", "alpha", "beta", "gamma", "p_skills", "seed", "final_reward", "status", "elapsed_s")
+
+
+def _row(sha, a, b, g, p, seed, r, status="ok", elapsed=1.0):  # noqa: PLR0913
+    return dict(zip(_FIELDS, (sha, a, b, g, p, seed, r, status, elapsed), strict=True))
+
+
 def _write_csv(path: Path, rows: list[dict]) -> None:
-    header = ["cell_sha", "alpha", "beta", "gamma", "p_skills", "seed", "final_reward", "status", "elapsed_s"]
     with path.open("w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=header)
+        w = csv.DictWriter(f, fieldnames=_FIELDS)
         w.writeheader()
         w.writerows(rows)
 
@@ -35,29 +41,18 @@ def _full_grid(tmp_path: Path) -> Path:
     """Synthesise a compact 3^4 = 81-cell grid, 3 seeds each, all ok."""
     csv_path = tmp_path / "seed_table.csv"
     rows = []
-    sha_counter = 0
-    for a in (0.5, 1.0, 2.0):
-        for b in (0.5, 1.0, 2.0):
-            for g in (0.0, 0.5, 1.0):
-                for p in (-10.0, -5.0, -1.0):
-                    sha = f"cell{sha_counter:04d}"
-                    sha_counter += 1
-                    for seed in (42, 7, 271):
-                        # deterministic reward function of knobs + small seed noise
-                        r = -0.1 * a + 0.05 * b - 0.2 * g + 0.01 * p + (seed % 3) * 0.001
-                        rows.append(
-                            {
-                                "cell_sha": sha,
-                                "alpha": a,
-                                "beta": b,
-                                "gamma": g,
-                                "p_skills": p,
-                                "seed": seed,
-                                "final_reward": r,
-                                "status": "ok",
-                                "elapsed_s": 1.0,
-                            }
-                        )
+    coords = [
+        (a, b, g, p)
+        for a in (0.5, 1.0, 2.0)
+        for b in (0.5, 1.0, 2.0)
+        for g in (0.0, 0.5, 1.0)
+        for p in (-10.0, -5.0, -1.0)
+    ]
+    for n, (a, b, g, p) in enumerate(coords):
+        sha = f"cell{n:04d}"
+        for seed in (42, 7, 271):
+            r = -0.1 * a + 0.05 * b - 0.2 * g + 0.01 * p + (seed % 3) * 0.001
+            rows.append(_row(sha, a, b, g, p, seed, r))
     _write_csv(csv_path, rows)
     return csv_path
 
@@ -74,20 +69,7 @@ def test_per_cell_stats_t_ci95_dof(tmp_path: Path) -> None:
     csv_path = tmp_path / "tiny.csv"
     _write_csv(
         csv_path,
-        [
-            {
-                "cell_sha": "x",
-                "alpha": 1.0,
-                "beta": 1.0,
-                "gamma": 0.5,
-                "p_skills": -5.0,
-                "seed": s,
-                "final_reward": v,
-                "status": "ok",
-                "elapsed_s": 1.0,
-            }
-            for s, v in zip((42, 7, 271), (0.1, 0.2, 0.3), strict=True)
-        ],
+        [_row("x", 1.0, 1.0, 0.5, -5.0, s, v) for s, v in zip((42, 7, 271), (0.1, 0.2, 0.3), strict=True)],
     )
     per = mod._per_cell_stats(mod._load_rows(csv_path))
     cell = next(iter(per.values()))
@@ -123,59 +105,10 @@ def test_handles_partial_n_ok(tmp_path: Path) -> None:
     """n_ok=1 cell ⇒ ci95=0.0 (no t-stat definable), not NaN; appears in partial_cells."""
     csv_path = tmp_path / "partial.csv"
     rows = [
-        # full baseline cell
-        *(
-            {
-                "cell_sha": "base",
-                "alpha": 1.0,
-                "beta": 1.0,
-                "gamma": 0.5,
-                "p_skills": -5.0,
-                "seed": s,
-                "final_reward": 0.1,
-                "status": "ok",
-                "elapsed_s": 1.0,
-            }
-            for s in (42, 7, 271)
-        ),
-        # one full extra cell so best/worst selection has something to chew on
-        *(
-            {
-                "cell_sha": "extra",
-                "alpha": 0.5,
-                "beta": 0.5,
-                "gamma": 0.0,
-                "p_skills": -10.0,
-                "seed": s,
-                "final_reward": -0.2,
-                "status": "ok",
-                "elapsed_s": 1.0,
-            }
-            for s in (42, 7, 271)
-        ),
-        # partial cell: only seed 42 ok, other seeds TIMEOUT
-        {
-            "cell_sha": "partial1",
-            "alpha": 2.0,
-            "beta": 2.0,
-            "gamma": 1.0,
-            "p_skills": -1.0,
-            "seed": 42,
-            "final_reward": 0.5,
-            "status": "ok",
-            "elapsed_s": 1.0,
-        },
-        {
-            "cell_sha": "partial1",
-            "alpha": 2.0,
-            "beta": 2.0,
-            "gamma": 1.0,
-            "p_skills": -1.0,
-            "seed": 7,
-            "final_reward": 0.0,
-            "status": "TIMEOUT",
-            "elapsed_s": 240.0,
-        },
+        *(_row("base", 1.0, 1.0, 0.5, -5.0, s, 0.1) for s in (42, 7, 271)),
+        *(_row("extra", 0.5, 0.5, 0.0, -10.0, s, -0.2) for s in (42, 7, 271)),
+        _row("partial1", 2.0, 2.0, 1.0, -1.0, 42, 0.5),
+        _row("partial1", 2.0, 2.0, 1.0, -1.0, 7, 0.0, status="TIMEOUT", elapsed=240.0),
     ]
     _write_csv(csv_path, rows)
     stats = mod.compute_stats(csv_path)
