@@ -12,13 +12,13 @@ from torch import nn, optim
 from torch.distributions import Categorical
 
 from src.env.action_mask import compute_mask
-from src.env.actions import V_MAX_DEFAULT, global_index_to_action
+from src.env.actions import global_index_to_action
 from src.env.skills_graph_env import SkillsGraphEnv
-from src.env.state import State
 from src.model.policy_net import PolicyNet
+from src.services._ppo_helpers import pad_state
 from src.services.gae_buffer import Trajectory, compute_gae_advantages, compute_returns
 
-_CLIP, _LAM, _GAMMA, _F_DIM, _FEAT_NDIM = 0.2, 0.95, 0.99, 16, 2
+_CLIP, _LAM, _GAMMA = 0.2, 0.95, 0.99
 
 
 @dataclass
@@ -35,17 +35,6 @@ class PPOConfig:
     vf_coef: float = 0.5
 
 
-def _pad(state: State, v_max: int = V_MAX_DEFAULT) -> tuple[torch.Tensor, torch.Tensor]:
-    """Pad ``State.X`` to ``(1, v_max, F)`` + a ``(1, v_max)`` bool mask."""
-    feat = state.X
-    n, f = feat.shape if feat.ndim == _FEAT_NDIM else (0, _F_DIM)
-    x, m = torch.zeros((1, v_max, f), dtype=torch.float32), torch.zeros((1, v_max), dtype=torch.bool)
-    take = min(n, v_max)
-    if take > 0:
-        x[0, :take], m[0, :take] = feat[:take].float(), True
-    return x, m
-
-
 class PPOTrainer:
     """PPO with clipped surrogate + GAE — wraps our 4-tuple env directly."""
 
@@ -60,16 +49,15 @@ class PPOTrainer:
         self.optimizer = optim.Adam(self.policy.parameters(), lr=float(cfg.lr))
 
     def _fwd(
-        self, state: State, action_mask: torch.Tensor | None = None
+        self, state, action_mask: torch.Tensor | None = None
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Forward the policy over ``state`` with an explicit ``action_mask``.
-
         ``action_mask`` defaults to the live env mask (rollout path). During
         ``update()`` we replay historical states; the env's current mask
         does not match those states, so callers pass the per-state mask
         computed from ``compute_mask(state)`` to avoid -inf log-prob spikes.
         """
-        x, m = _pad(state)
+        x, m = pad_state(state)
         logits, value = self.policy(x, m)
         if action_mask is None:
             action_mask = self.env.get_action_mask()
@@ -153,12 +141,10 @@ class PPOTrainer:
         return {"policy_loss": lp, "value_loss": lv, "clip_fraction": cf, "approx_kl": kl}
 
     def train(self, total_steps: int, *, log_every: int = 1000) -> list[dict]:
-        """Outer loop: collect → update; return per-iter metrics."""
-        _ = log_every  # logger-agnostic; caller subscribes to ``history``
+        """Outer loop: collect → update; return per-iter metrics. ``log_every`` is logger-agnostic — caller subscribes to ``history``."""
+        _ = log_every
         history, steps = [], 0
         while steps < total_steps:
-            metrics = self.update(self.collect_rollout())
             steps += self.n_steps
-            metrics["steps"] = steps
-            history.append(metrics)
+            history.append({**self.update(self.collect_rollout()), "steps": steps})
         return history
