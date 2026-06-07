@@ -1,18 +1,34 @@
 {
   "betweenness_calls": 2,
   "final_betweenness": {
+    "skill.code_review.L1": 0.0012315270935960591,
+    "skill.code_review.L2": 0.0,
     "skill.code_review.L3": 0.0,
+    "skill.diagram_creator.L1": 0.0,
     "skill.diagram_creator.L2": 0.0,
+    "skill.diagram_creator.L3": 0.0,
+    "skill.documentation_writer.L1": 0.0012315270935960591,
+    "skill.documentation_writer.L2": 0.0,
+    "skill.documentation_writer.L3": 0.0,
+    "skill.file_search.L1": 0.0,
     "skill.file_search.L2": 0.0,
+    "skill.file_search.L3": 0.0,
     "skill.json_validator.L1": 0.0,
-    "skill.python_execution.L1": 0.003205128205128205,
+    "skill.json_validator.L2": 0.0,
+    "skill.json_validator.L3": 0.0,
+    "skill.markdown_formatter.L1": 0.0,
+    "skill.markdown_formatter.L2": 0.0,
+    "skill.markdown_formatter.L3": 0.0,
+    "skill.python_execution.L1": 0.0024630541871921183,
+    "skill.python_execution.L2": 0.0,
     "skill.python_execution.L3": 0.0,
+    "skill.refactoring_planner.L1": 0.0,
     "skill.refactoring_planner.L2": 0.0,
     "skill.refactoring_planner.L3": 0.0,
-    "skill.test_generator.L1": 0.019230769230769232,
+    "skill.test_generator.L1": 0.0,
     "skill.test_generator.L2": 0.0,
     "skill.test_generator.L3": 0.0,
-    "skill.web_search.L1": 0.016025641025641024,
+    "skill.web_search.L1": 0.0,
     "skill.web_search.L2": 0.0,
     "skill.web_search.L3": 0.0
   },
@@ -50,18 +66,18 @@
   },
   "iterations": [
     {
-      "approx_kl": 0.0001683272421360016,
+      "approx_kl": -0.010481635108590126,
       "clip_fraction": 0.0,
-      "policy_loss": 0.09857999533414841,
+      "policy_loss": -0.09253156930208206,
       "steps": 128,
-      "value_loss": 0.03648608177900314
+      "value_loss": 0.04460594058036804
     },
     {
-      "approx_kl": -0.005381898954510689,
+      "approx_kl": -0.006114508956670761,
       "clip_fraction": 0.0,
-      "policy_loss": 0.018562883138656616,
+      "policy_loss": -0.46514809131622314,
       "steps": 256,
-      "value_loss": 0.06694301962852478
+      "value_loss": 0.09422238171100616
     }
   ],
   "num_iterations": 2

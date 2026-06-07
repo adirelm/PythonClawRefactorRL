@@ -1,14 +1,23 @@
 {
-  "mean_final_reward": -0.592499993625097,
-  "num_seeds": 2,
+  "attempted_seeds": [
+    42,
+    7,
+    123,
+    314,
+    271
+  ],
+  "mean_final_reward": -0.3402380876553555,
+  "num_seeds": 3,
   "per_seed_final_reward": {
-    "42": -0.4399999675806612,
-    "7": -0.7450000196695328
+    "271": -0.44000001391395926,
+    "42": -0.43999999295920134,
+    "7": -0.140714256092906
   },
   "seeds": [
     42,
-    7
+    7,
+    271
   ],
-  "std_final_reward": 0.1525000260444358,
-  "total_steps_per_seed": 128
+  "std_final_reward": 0.14108465430613082,
+  "total_steps_per_seed": 256
 }

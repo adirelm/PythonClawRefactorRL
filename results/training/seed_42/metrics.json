@@ -71,7 +71,14 @@
       "policy_loss": -0.08517034351825714,
       "steps": 128,
       "value_loss": 0.024746226146817207
+    },
+    {
+      "approx_kl": 0.0029113031923770905,
+      "clip_fraction": 0.0,
+      "policy_loss": 0.0053693316876888275,
+      "steps": 256,
+      "value_loss": 0.02522079274058342
     }
   ],
-  "num_iterations": 1
+  "num_iterations": 2
 }
