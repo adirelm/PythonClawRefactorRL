@@ -89,10 +89,10 @@ rather than masking them):
 | # | Phase | Status | Evidence pointer template |
 |---|---|---|---|
 | **0** | **Bootstrap** (repo skeleton, pyproject, uv, ruff, pytest, CI, ≤150-LOC guardrail, docs/ scaffold, ADR-001/002 stubs) | ✅ | `pyproject.toml`, `.github/workflows/ci.yml`, `docs/PRD.md`, `docs/PLAN.md`, `docs/adr/ADR-001-pythonclaw-shim-boundary.md`, `docs/adr/ADR-002-graphify-adapter.md`, commit Phase 0 bootstrap |
-| 1 | §2.1 GRAPHIFY + Obsidian (graph builder, adapter, NetworkX + pyvis screenshots, Obsidian hero shots) | 🟡 in-progress (T1.1–T1.6 ✅, T01-05/T01-06/T01-07 pending) | `src/graphify/` (+ `src/graphify/adapter.py`), `results/graphify_output.gpickle`, `results/vault/`, `results/figures/obsidian_before.png` (Phase 3+: dedicated `results/graphs/` PNG/HTML renders + `results/obsidian/hero_{1,2,3}.png` deferred — current artefact set covers F1/F2/F3 acceptance), commit Phase 1 |
+| 1 | §2.1 GRAPHIFY + Obsidian (graph builder, adapter, screenshots) | ✅ (brief deliverables done; extra renders deferred) | `src/graphify/`, `results/graphify_output.gpickle`, `results/vault/`, `results/figures/obsidian_before.png` + `obsidian_after.png` (the brief-required before/after shots). Dedicated `results/graphs/` NetworkX/pyvis PNGs + `results/obsidian/hero_{1,2,3}.png` were self-imposed extras, **not brief-required**, and remain deferred. commit `0165fa2` |
 | 2 | §2.2 Environment (state/action design, refactor env, reward = α·ΔModularity + β·ΔCohesion − γ·Coupling_Penalty + P_skills, masking) | ✅ | `src/env/skills_graph_env.py`, `src/env/state.py`, `src/env/actions.py`, `src/env/action_mask.py`, `src/env/reward.py`, `src/services/metrics/{modularity,cohesion,coupling}.py`, `src/services/centrality.py`, `docs/STATE_DESIGN.md`, `docs/ACTION_DESIGN.md`, commit `ec1288a` (impl) + `1c317ef` (metrics gap close) |
 | 3 | §2.3 PPO + GAE (policy net, GAE advantage, clipped surrogate, SB3 spike + fallback) | ✅ | `src/services/ppo_trainer.py`, `src/services/gae_buffer.py`, `src/model/policy_net.py`, `src/model/encoder.py`, `scripts/train_ppo.py`, `results/figures/obsidian_after.png`, `results/figures/betweenness_ci.png`, `results/data/betweenness_table.csv`, `docs/adr/ADR-008-sb3-variable-v-buffer.md`, commit `71f0213` |
-| 4 | §2.4 Cost + ablations + essay (tiktoken cost panel, α/β/γ/P_skills ablation matrix ≥5 seeds, ΔReward summary, 2500–3000 word essay) | ⬜ | `docs/COST_ANALYSIS.md` (D8), `results/ablations/`, `docs/ANALYSIS.md` (D7 ΔReward), `docs/ESSAY.md`, `notebooks/analysis.ipynb`, commit Phase 4 |
+| 4 | §2.4 Cost + ablations + essay (tiktoken cost panel, α/β/γ/P_skills ablation matrix ≥5 seeds, ΔReward summary, 2500–3000 word essay) | ✅ | `docs/COST_ANALYSIS.md` (§0 Skills-token + PPO-runtime, D8), `results/ablations/` (81 cells × 5 seeds, 405/405 ok), `docs/ANALYSIS.md` (D7 ΔReward), `docs/ESSAY.md` (2,990 words), `notebooks/analysis.ipynb`, commit `phase4(rc4)` |
 
 Phase gates (all must be green before a phase is marked ✅):
 ruff zero violations · every `.py` ≤150 LOC · coverage ≥85% · uv-only ·
@@ -114,7 +114,7 @@ Status: ✅ committed by the foundation agent. Listed for traceability.
 | T00-05 | Draft `docs/adr/ADR-002-graphify-adapter.md` (in-tree re-impl + adapter interface) | Drafting ADR-002 (GRAPHIFY adapter) | 0 | +120 docs | TR-graphify | ADR names adapter interface methods and rollback path |
 | T00-06 | CLAUDE.md inheritance from A1 (≤150 LOC, ruff, pytest ≥85%, uv-only, commit-subject regex, PII deny-list) | Importing CLAUDE.md inheritance | 0 | +0 | (gates) | `grep -E "150\|ruff\|85%\|uv\|Phase " CLAUDE.md` returns ≥6 matches |
 
-## §3.1 Phase 1 — §2.1 GRAPHIFY + Obsidian (🟡 in-progress; T1.1–T1.6 landed)
+## §3.1 Phase 1 — §2.1 GRAPHIFY + Obsidian (✅ brief deliverables; extra renders deferred)
 
 Goal: build the code graph (nodes = files/modules/symbols, edges =
 imports/calls/inheritance), wrap it behind `GraphifyAdapter`, and produce
@@ -263,7 +263,7 @@ bundle that gates Phase 3 closure.
   table + D6 learning curve re-rendered at n=5. T3.7 / F10 now ✅. The −2 honesty
   penalty pre-committed for a 3/5 outcome is lifted per PRD §7 (`5/5 → done`).
 
-## §3.4 Phase 4 — §2.4 Cost + ablations + essay (⬜ pending)
+## §3.4 Phase 4 — §2.4 Cost + ablations + essay (✅ done)
 
 Goal: token-cost panel via tiktoken, full α/β/γ/P_skills ablation matrix
 (≥5 seeds/cell), and the 2500–3000 word essay with 8–12 citations + 2
