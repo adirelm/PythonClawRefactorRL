@@ -4,12 +4,17 @@ Coverage target: ≥85% on this module. Each test asserts a property
 of Q that the canonical reward equation
 (R_t = α·ΔModularity + β·ΔCohesion − γ·Coupling_Penalty + P_skills)
 relies on — so a regression here is felt directly by the PPO trainer.
+
+Phase 4 RC-1 watchdog + RC-2 topology guards have a dedicated
+sibling file (``test_modularity_watchdog.py``) to stay under the
+150-LOC cap. This file keeps the original semantic property tests.
 """
 
 from __future__ import annotations
 
 import networkx as nx
 
+from src.services.metrics import modularity as mod_mod
 from src.services.metrics.modularity import compute_modularity, delta_modularity
 
 # Two disjoint K_3 should yield Q ≳ 0.5 with Louvain (clear community split).
@@ -77,3 +82,46 @@ def test_delta_zero_for_identical_snapshots() -> None:
     """Idempotent step (e.g. NOOP) ⇒ ΔQ exactly 0.0."""
     g = _make_disjoint_triangles()
     assert delta_modularity(g, g) == 0.0
+
+
+def test_topology_guard_skips_louvain_for_empty_graph(monkeypatch) -> None:
+    """V=0 must return 0.0 *without* invoking Louvain (RC-2 guard)."""
+    calls = {"n": 0}
+
+    def boom(*_a, **_kw):
+        calls["n"] += 1
+        raise AssertionError("Louvain must not be called on empty graph")
+
+    monkeypatch.setattr(mod_mod.nx_comm, "louvain_communities", boom)
+    assert compute_modularity(nx.DiGraph()) == 0.0
+    assert calls["n"] == 0
+
+
+def test_topology_guard_skips_louvain_for_singleton(monkeypatch) -> None:
+    """V<2 must return 0.0 without invoking Louvain (RC-2 guard)."""
+    calls = {"n": 0}
+
+    def boom(*_a, **_kw):
+        calls["n"] += 1
+        raise AssertionError("Louvain must not be called on V<2 graph")
+
+    monkeypatch.setattr(mod_mod.nx_comm, "louvain_communities", boom)
+    g = nx.DiGraph()
+    g.add_node("only")
+    assert compute_modularity(g) == 0.0
+    assert calls["n"] == 0
+
+
+def test_topology_guard_skips_louvain_for_edgeless(monkeypatch) -> None:
+    """E=0 (multi-node) must return 0.0 without invoking Louvain."""
+    calls = {"n": 0}
+
+    def boom(*_a, **_kw):
+        calls["n"] += 1
+        raise AssertionError("Louvain must not be called on E=0 graph")
+
+    monkeypatch.setattr(mod_mod.nx_comm, "louvain_communities", boom)
+    g = nx.DiGraph()
+    g.add_nodes_from(["a", "b", "c"])
+    assert compute_modularity(g) == 0.0
+    assert calls["n"] == 0

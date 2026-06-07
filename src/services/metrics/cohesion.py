@@ -25,17 +25,34 @@ The implementation:
    each node's community-local clustering signal.
 
 Edge cases (``|V| < 2`` or ``|E| == 0``) short-circuit to ``0.0`` so the
-metric is total over every DiGraph the env hands us.
+metric is total over every DiGraph the env hands us (RC-2 early-return,
+matches the contract in ``modularity.py``).
+
+Phase 4 RC-1: the Louvain call here shares the same wedge surface as
+``modularity.compute_modularity`` — on mid-rollout snapshots from
+seeds 123/314 it can block for many seconds. We delegate to the
+shared ``_run_with_budget`` watchdog (re-exported from ``modularity``)
+and on timeout fall back to a single-community partition (cohesion = 0).
 """
 
 from __future__ import annotations
 
+import logging
+
 import networkx as nx
 import networkx.algorithms.community as nx_comm
+
+from src.services.metrics.modularity import _run_with_budget
 
 _LOUVAIN_SEED = 42  # sealed in CLAUDE.md §CANONICAL VALUES for reproducibility
 _MIN_NODES_FOR_CLUSTERING = 2  # clustering coefficient undefined for |V| < 2
 _MIN_COMMUNITY_SIZE = 2  # single-node communities contribute 0 (no neighbours)
+
+_log = logging.getLogger(__name__)
+
+
+def _louvain_partition(undirected: nx.Graph) -> list[set]:
+    return nx_comm.louvain_communities(undirected, seed=_LOUVAIN_SEED)
 
 
 def compute_cohesion(graph: nx.DiGraph) -> float:
@@ -58,7 +75,16 @@ def compute_cohesion(graph: nx.DiGraph) -> float:
         # (e.g. self-loops only) yields no usable edge set for clustering.
         return 0.0
 
-    communities = nx_comm.louvain_communities(undirected, seed=_LOUVAIN_SEED)
+    # RC-1: Louvain watchdog — on wedge, fall back to a single community,
+    # which yields cohesion = 0.0 below (no within-community structure to score).
+    communities = _run_with_budget(_louvain_partition, undirected)
+    if communities is None:
+        _log.warning(
+            "cohesion: Louvain exceeded watchdog budget (V=%d E=%d); returning 0.0",
+            undirected.number_of_nodes(),
+            undirected.number_of_edges(),
+        )
+        return 0.0
 
     total_weighted = 0.0
     total_size = 0
