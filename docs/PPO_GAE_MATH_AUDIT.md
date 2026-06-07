@@ -13,21 +13,21 @@ Huang & Ontañón 2022 (action masking), Engstrom 2020 (implementation matters).
 > L^CLIP(θ) = Ê_t[ min( r_t(θ) Â_t, clip(r_t(θ), 1−ε, 1+ε) Â_t ) ]
 > where r_t(θ) = π_θ(a_t|s_t) / π_θ_old(a_t|s_t) = exp(log π_new − log π_old)
 
-**Code (ppo_trainer.py:128–130, `compute_loss`):**
+**Code (ppo_trainer.py:116–118, `compute_loss`):**
 ```python
 ratio = torch.exp(new_lps - trajectory.log_probs[idxs])
 clipped = torch.clamp(ratio, 1.0 - self.clip_eps, 1.0 + self.clip_eps)
 return -torch.min(ratio * adv, clipped * adv).mean(), nn.functional.mse_loss(new_vs, ret)
 ```
 
-**Clip-eps seal (ppo_trainer.py:54–55):**
+**Clip-eps seal (ppo_trainer.py:43–44):**
 ```python
 if float(cfg.clip_eps) != _CLIP or float(cfg.gae_lambda) != _LAM:
     raise ValueError(f"clip_eps/gae_lambda sealed at {_CLIP}/{_LAM}; got {cfg}")
 ```
 where `_CLIP, _LAM, _GAMMA = 0.2, 0.95, 0.99` (line 21).
 
-**KL + clip-fraction logging (ppo_trainer.py:150–152):**
+**KL + clip-fraction logging (ppo_trainer.py:138–140):**
 ```python
 diff = self._eval(trajectory, batch)[0] - trajectory.log_probs[batch]
 cf = float(((torch.exp(diff) - 1.0).abs() > self.clip_eps).float().mean().item())
@@ -74,7 +74,7 @@ for step in range(t - 1, -1, -1):
 return advantages + values
 ```
 
-**Trainer wiring (ppo_trainer.py:134):**
+**Trainer wiring (ppo_trainer.py:122):**
 ```python
 adv = compute_gae_advantages(trajectory, gamma=self.gamma, gae_lambda=self.gae_lambda, last_value=0.0)
 ```
@@ -115,7 +115,7 @@ action_idx = dist.sample()
 log_prob = dist.log_prob(action_idx)
 ```
 
-**Update-path mask replay (ppo_trainer.py:109–112):**
+**Update-path mask replay (ppo_trainer.py:97–100):**
 ```python
 amask_state = compute_mask(traj.states[i])
 logits, value, amask = self._fwd(traj.states[i], action_mask=amask_state)
@@ -157,11 +157,11 @@ values (ε=0.2, λ=0.95, γ=0.99).
 1. **Value clipping absent (WARN, §1).**
    Engstrom et al. 2020 §4.2 recommends `v_clipped = v_old + clip(v_new − v_old, −ε, +ε)`
    and `value_loss = max(MSE(v_new, ret), MSE(v_clipped, ret))`. Current code
-   (`ppo_trainer.py:130`) uses plain `nn.functional.mse_loss(new_vs, ret)`. Not a
+   (`ppo_trainer.py:118`) uses plain `nn.functional.mse_loss(new_vs, ret)`. Not a
    Schulman 2017 PPO requirement; flag for `BUG_REPORT.md` follow-ups.
 
 2. **No advantage normalization across full batch (INFO, §1).**
-   `ppo_trainer.py:137` normalizes `adv` *once* over the full trajectory before
+   `ppo_trainer.py:125` normalizes `adv` *once* over the full trajectory before
    mini-batching: `adv = (adv - adv.mean()) / (adv.std() + 1e-8)`. Some
    implementations renormalize per-minibatch (Engstrom 2020 §4.3). Either is
    defensible; current choice is cheaper and stable. No action.
