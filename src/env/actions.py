@@ -1,16 +1,24 @@
 """Action space for PythonClaw Refactor RL.
 
-Discrete, masked, parametric action space per docs/ACTION_DESIGN.md.
+Discrete, masked, parametric action space per docs/ACTION_DESIGN.md §1.
 
-Encoding (flat global index ∈ [0, A_max) where A_max = 45057):
+A_max derivation (CLAUDE.md §CANONICAL VALUES, sealed value 45057):
+    N_SPLIT  = V_max * K_split  = 512 * 8  =  4096
+    N_MERGE  = V_max * M_merge  = 512 * 16 =  8192
+    N_REWIRE = E_max * R_rewire = 4096 * 8 = 32768
+    N_NOOP   = 1
+    -----------------------------------------------
+    A_max    = 4096 + 8192 + 32768 + 1     = 45057
+
+Encoding (flat global index ∈ [0, A_max)):
 - SPLIT  : idx = primary * K            + secondary     ; range [0, 4096)
 - MERGE  : idx = 4096    + primary * M  + secondary     ; range [4096, 12288)
 - REWIRE : idx = 12288   + primary * R  + secondary     ; range [12288, 45056)
 - NOOP   : idx = 45056
 
-where K = 8 (split-points), M = 16 (merge-targets), R = 8 (rewire-targets),
-V_max = 512 (node cap), E_max = 4096 (edge cap). Constants are pinned in
-config.action and CLAUDE.md §CANONICAL VALUES; they MUST stay in sync.
+Drift guard: any change to V_max / K_split / M_merge / E_max / R_rewire
+breaks the policy-head sizing and the sealed contract — caught by the
+import-time assert below AND by tests/architecture/test_a_max.py.
 """
 
 from __future__ import annotations
