@@ -75,23 +75,180 @@ the complementarity hypothesis fails), and §5 concludes.
 
 ## §2 Static analysis landscape (~700 words) — brief prompt #2: AI automating SA
 
-- Modularity, cohesion, coupling as deterministic, reproducible measures.
-- Where these measures hit a wall: semantic intent, naming conventions,
-  cross-cutting domain coherence, design intent the AST cannot see.
-- LLM-agents as a semantic judgment layer on top of deterministic priors.
-- Honest framing: what SA can and cannot automate today.
-- **Cites:** `newman2004community`, `blondel2008louvain`, `fowler1999refactoring`,
-  `tichy1985rcs`, `jimenez2024swebench`.
+The reward function this assignment optimises,
+`R_t = α·ΔModularity + β·ΔCohesion − γ·Coupling + P_skills` with sealed
+weights (1.0, 1.0, 0.5, −5.0), is the empirical commitment behind the
+COMPLEMENTARITY thesis: every term is a deterministic, recomputable
+quantity that a static analyser can produce without consulting a model.
+Modularity is the Newman-Girvan community score [newman2004community]
+computed on a Louvain partition [blondel2008louvain] over the undirected
+projection of the call/import graph (`src/services/metrics/modularity.py`
+L25–L26 pins `seed=42` for reproducibility). Cohesion is the per-cluster
+edge density, and coupling counts the cross-cluster edges. We chose
+exactly these three — not thirty — because each captures a single,
+orthogonal failure mode: modularity penalises a bad partition globally,
+cohesion penalises a weak partition locally, coupling penalises the
+cross-module surface that survives any partition. Adding more metrics
+would have purchased redundancy at the cost of an interpretable reward.
+
+What deterministic static analysis does well, it does very well. The
+Louvain modularity score is exactly reproducible (same graph, same seed,
+same number — `seed=42` is the only knob); coupling is a literal edge
+count; cohesion is a closed-form ratio on the undirected projection.
+These are *auditable* in the strict sense that a grader, a reviewer, or
+future-us can rerun `src/services/metrics/` against any saved graph and
+recover the reward components byte-for-byte. The lineage of this
+auditability runs back through the canonical refactoring literature
+[fowler1999refactoring] and even further to the deterministic
+version-control model that made source histories first-class objects
+[tichy1985rcs]: reproducibility is the price of admission for any tool
+that wants to *guide* a code change rather than merely propose one.
+Modern static-analysis pipelines (Pyright, Pylint, Ruff, the AST-walking
+backbone of `src/graphify/local_impl.py`) inherit that contract directly.
+
+Where deterministic SA hits a wall is precisely where the COMPLEMENTARITY
+thesis bites. A modularity score cannot tell you whether a freshly-named
+function `process_user` is semantically apt or whether it should have
+been called `enrich_user_profile`; a coupling count cannot distinguish
+an *accidental* fan-out from a deliberate Strategy pattern; a cohesion
+ratio cannot see that two structurally separate modules in fact share a
+domain invariant the AST never encodes. Fowler's catalogue of refactors
+[fowler1999refactoring] is full of decisions — Extract Class, Move
+Method, Rename Variable — whose *correctness* is a question of intent
+rather than graph topology. The closest deterministic bridge today is
+learned graph representation of programs [allamanis2018graphs], which
+converts source into a typed graph a model can consume, but even that
+bridge only buys richer *features*; the judgment itself still has to
+come from somewhere.
+
+That somewhere is, increasingly, an LLM. [chen2021codex] established
+that code-pretrained language models can synthesise non-trivial
+functions from natural-language intent; [jimenez2024swebench] extended
+the bar by showing that the same models, wrapped as agents, can resolve
+real GitHub issues end-to-end on a benchmark of 2,294 tasks; [liu2023chatgpt]
+quantified the gap between naive sampling and rigorous evaluation,
+showing that LLM-generated code passes hidden test cases at higher
+rates than earlier heuristic baselines once prompted and verified
+carefully. None of these results dethrone deterministic SA — they
+specialise on exactly the decisions modularity and coupling cannot
+adjudicate, and they do so at a cost (latency, API spend, hallucination
+risk) that makes them unsuitable as the *only* layer in a refactor loop.
+
+This essay's working position is therefore that AI can automate
+static-analysis-*scaled* decisions cheaply and exactly, and can automate
+intent-*scaled* decisions expensively and fuzzily, and that any
+production refactor tool will need both. The boundary between the two
+regimes is not a metaphysical one; it is an engineering surface — the
+A_max = 45057 action space derived in §3 — and the goal of pinning the
+seam empirically is to know which moves cross it. The remainder of the
+essay commits to the deterministic-prior side of the boundary and asks
+the empirical question that side can answer: how far can a masked PPO
+policy go using *only* SA-derived signal, before the LLM judgment layer
+has to take over? That judgment layer is explicitly future work, framed
+in §5; everything in between is what the rest of this document defends.
+
+- **Cites:** `newman2004community`, `blondel2008louvain`,
+  `fowler1999refactoring`, `tichy1985rcs`, `allamanis2018graphs`,
+  `chen2021codex`, `jimenez2024swebench`, `liu2023chatgpt`.
 
 ## §3 Methodology (~900 words)
 
-- This A4's architecture: `SkillsGraphEnv` + PPO + GAE + action masking.
-- The reward shape: `R_t = α·ΔModularity + β·ΔCohesion − γ·Coupling + P_skills`
-  with the locked canonical values (α=1.0, β=1.0, γ=0.5, P_skills=−5.0).
-- How a GRAPHIFY-equivalent (local Python-source parser → NetworkX) feeds the env.
-- How LLM-agents could plug in (open question + future work — Phase 4 stops
-  short of an end-to-end LLM-in-the-loop trainer).
-- PPO/GAE math anchors: `docs/PPO_GAE_MATH_AUDIT.md` (ε=0.2, λ=0.95, γ=0.99).
+The refactor task is cast as an episodic Markov decision process whose
+state, action, transition, and reward are each tied directly to the
+graph artefacts of §2. A state is the current skills-graph rolled into
+the `State` dataclass at `src/env/state.py` L38–L67; an action is one
+of 45057 discrete graph-rewriting primitives enumerated in
+`src/env/actions.py`; the transition is the deterministic graph edit
+implemented in `src/env/_apply_action.py`; and the reward is the
+sealed-weight composite from §2. The policy is optimised by Proximal
+Policy Optimization [schulman2017ppo] with Generalized Advantage
+Estimation [schulman2016gae] — both algorithms chosen because their
+clipped-objective and bias/variance-tunable advantage estimator are the
+standard match for a discrete, high-dimensional, masked action space.
+
+The state representation packs the structural features the reward
+function and the policy both need. `src/env/state.py` L24–L31 fixes a
+sixteen-column contract per node: log-normalised LOC, clipped
+cyclomatic complexity, in- and out-degree, cached betweenness,
+three-way layer one-hot (L1/L2/L3), lazy-load flag, kind one-hot
+(class/module/function), in-skill membership, composite complexity,
+age-in-episodes, and a reserved slot. The matrix is built once by
+`_build_features` at L105–L140 from the GRAPHIFY-emitted DiGraph,
+with the relation-weighted CSR adjacency built in parallel by
+`_build_adjacency` at L82–L102. Variable-|V| graphs are the primary
+path (ADR-004), with an ADR-008 padding fallback to V_max = 512 used
+by the PPO trainer at `src/services/ppo_trainer.py` L38–L46 so the
+policy head sees a fixed (1, 512, 16) tensor. The encoder in
+`src/model/encoder.py` collapses that to a per-graph embedding and the
+actor head emits a logit vector of length 45057.
+
+The action space itself is the seam where the COMPLEMENTARITY thesis
+turns from prose into arithmetic. `src/env/actions.py` L5–L11
+documents — and asserts at import time (L137–L140) — the canonical
+derivation: SPLIT = V_max · K_split = 512 · 8 = 4096; MERGE =
+V_max · M_merge = 512 · 16 = 8192; REWIRE = E_max · R_rewire =
+4096 · 8 = 32768; NOOP = 1. The sum, 45057, is the size of the discrete
+choice the policy faces every step. Every one of those moves is
+*constructively* enabled by a graph-level prior: SPLITs are addressed
+by node index, MERGEs by an ordered node pair, REWIREs by an edge
+index, and NOOP is the always-legal escape slot. Deterministic
+enumeration ends here. What the policy contributes on top of that
+enumeration is *selection* — which of the 45057 to take, conditioned
+on the current graph — and that selection is precisely the decision
+SA cannot make on its own.
+
+Action masking, following [huang2022masking], turns the enumeration
+into a tractable distribution. At each step the environment computes a
+boolean legality mask of shape (1, 45057), and the policy head zeroes
+out the logits of illegal moves *before* the softmax: `masked =
+logits.masked_fill(~safe_mask, float("-inf"))` at
+`src/model/policy_net.py` L118, after which `Categorical(logits=masked)`
+samples only from legal moves. The defensive NOOP-pin at L108–L117
+handles the degenerate all-False mask observed on seeds 123/314/271,
+where wedged graphs would otherwise hand `Categorical` a row of
+−inf and produce a NaN distribution; documented in `docs/_pending/BUG_REPORT.md`
+Bug 1. This single guarded line is the difference between a training
+loop that recovers from degenerate topologies and one that wedges
+silently — exactly the kind of edge case [huang2022masking] §3 names.
+
+PPO training runs against the standard clipped surrogate
+[schulman2017ppo] with the hyperparameters this project has sealed:
+clip ε = 0.2, GAE λ = 0.95, γ = 0.99. These are not free parameters.
+`src/services/ppo_trainer.py` L54–L55 raises `ValueError` at trainer
+construction if `clip_eps` or `gae_lambda` drifts from those values,
+freezing the algorithmic surface against accidental tuning. The
+clipped surrogate is applied at L129 via
+`torch.clamp(ratio, 1 - ε, 1 + ε)`; the GAE-λ advantages are computed
+at L134 by `compute_gae_advantages` against the same sealed γ. Four
+epochs of minibatch updates per rollout (PPOConfig defaults at L24–L36)
+are taken with batch size 64 over n_steps = 128 transitions.
+
+The five-seed protocol is the empirical contract this methodology has
+to honour. `scripts/train_5seed_isolated.py` launches each of the
+canonical seeds [42, 7, 123, 314, 271] in an isolated subprocess with
+a 240-second wall-clock budget, writes a per-seed JSONL trajectory
+under `results/training/seed_<N>/`, and aggregates a
+`results/training/aggregate.json` over whichever seeds completed
+within their budget. Isolation matters: a wedge on one seed must not
+poison the others, and a subprocess boundary is the cheapest enforcement
+of that property. At the RC-5 retrain scale recorded under
+`results/training/aggregate.json`, 3/5 seeds complete cleanly
+(42, 7, 271) with mean reward −0.340 ± 0.141, and 2/5 (123, 314)
+wedge on the residual daemon-thread contention documented in
+`docs/TRACE.md` F10 — a known, reported failure mode, traced through
+RC-0 cProfile and patched to a per-step Louvain watchdog with a
+greedy-modularity fallback in `src/services/metrics/modularity.py`
+L33–L46, not a silently-dropped one. The HONESTY thresholds locked in
+`docs/ESSAY.md` §4 — 5/5 promote, 4/5 partial, 3/5 grade penalty −2,
+<3/5 halt — bind this number to a grade outcome before any retrain
+begins, so the 3/5 result is a measured outcome rather than a
+post-hoc rationalisation. The deterministic-prior layer of the
+architecture is what makes that binding possible in the first place:
+same graph, same seed, same modularity number, same reward, same
+expected return up to PPO stochasticity. That is the *audit* property
+§2 promised, cashed out as a training protocol — and it is what gives
+§4's empirical lessons evidential weight rather than mere narrative.
+
 - **Cites:** `schulman2016gae`, `schulman2017ppo`, `huang2022masking`.
 
 ## §4 Empirical lessons + limitations (~700 words) — brief prompt #3: limitations
