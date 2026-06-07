@@ -51,12 +51,26 @@ class _EpisodeInfo:
 class SkillsGraphEnv:
     """Custom training loop — NO Gymnasium (brief §2.2 ban)."""
 
-    def __init__(
-        self, source_dir: Path, *, seed: int, max_episode_steps: int = DEFAULT_MAX_EPISODE_STEPS
+    def __init__(  # noqa: PLR0913 - 4 AB-PLUMB reward overrides + canonical kwargs
+        self,
+        source_dir: Path,
+        *,
+        seed: int,
+        max_episode_steps: int = DEFAULT_MAX_EPISODE_STEPS,
+        reward_alpha: float | None = None,
+        reward_beta: float | None = None,
+        reward_gamma: float | None = None,
+        reward_p_skills: float | None = None,
     ) -> None:
         self.source_dir = Path(source_dir)
         self.seed = int(seed)
         self.max_episode_steps = int(max_episode_steps)
+        self._reward_coeffs: dict[str, float | None] = {
+            "alpha": reward_alpha,
+            "beta": reward_beta,
+            "gamma": reward_gamma,
+            "p_skills": reward_p_skills,
+        }
         self._graph = LocalGraphify().build(self.source_dir, seed=self.seed)
         self.centrality = CentralityScheduler(seed=self.seed)
         self.lazy_monitor = None  # SDK supplies the real registry.
@@ -87,7 +101,7 @@ class SkillsGraphEnv:
         graph_before = self._graph.copy()
         self._graph = _apply_action(self._graph, action)
         self._current_state = State.from_digraph(self._graph)
-        reward = _safe_reward(graph_before, self._graph, lazy_broken=False)
+        reward = _safe_reward(graph_before, self._graph, lazy_broken=False, coeffs=self._reward_coeffs)
         self._info.step += 1
         self._info.history.append(action)
         self._info.num_nodes = self._graph.number_of_nodes()
@@ -114,10 +128,23 @@ class SkillsGraphEnv:
         return self._current_state
 
 
-def _safe_reward(graph_before, graph_after, *, lazy_broken: bool) -> float:
-    """``compute_reward`` wrapped; falls back to ``P_skills``/``0.0`` on import gaps."""
+def _safe_reward(
+    graph_before,
+    graph_after,
+    *,
+    lazy_broken: bool,
+    coeffs: dict[str, float | None] | None = None,
+) -> float:
+    """``compute_reward`` wrapped; falls back to ``P_skills``/``0.0`` on import gaps.
+
+    ``coeffs`` forwards optional ``alpha/beta/gamma/p_skills`` overrides for
+    the AB-PLUMB ablation; ``None`` entries fall back to canonical config.
+    """
+    overrides = {k: v for k, v in (coeffs or {}).items() if v is not None}
     try:
-        comps: RewardComponents = compute_reward(graph_before, graph_after, lazy_load_broken=lazy_broken)
+        comps: RewardComponents = compute_reward(
+            graph_before, graph_after, lazy_load_broken=lazy_broken, **overrides
+        )
         return float(comps.total)
     except (ModuleNotFoundError, ImportError):
         return float(-5.0 if lazy_broken else 0.0)

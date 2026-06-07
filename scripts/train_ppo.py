@@ -50,6 +50,8 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--total-steps", type=int, default=SMOKE_STEPS)
     parser.add_argument("--source-dir", type=Path, default=DEFAULT_SOURCE)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT)
+    for flag in ("--alpha", "--beta", "--gamma", "--p-skills"):  # AB-PLUMB reward overrides
+        parser.add_argument(flag, type=float, default=None)
     return parser.parse_args(argv)
 
 
@@ -62,9 +64,17 @@ def _set_global_seeds(seed: int) -> None:
         torch.cuda.manual_seed_all(seed)
 
 
-def _build_components(seed: int, source_dir: Path, cfg: dict) -> tuple:
+def _build_components(seed: int, source_dir: Path, cfg: dict, coeffs: dict | None = None) -> tuple:
     """Construct (env, policy, trainer) wired with canonical PPO constants."""
-    env = SkillsGraphEnv(source_dir, seed=seed)
+    c = coeffs or {}
+    env = SkillsGraphEnv(
+        source_dir,
+        seed=seed,
+        reward_alpha=c.get("alpha"),
+        reward_beta=c.get("beta"),
+        reward_gamma=c.get("gamma"),
+        reward_p_skills=c.get("p_skills"),
+    )
     policy = PolicyNet()
     trainer = PPOTrainer(
         env,
@@ -76,24 +86,14 @@ def _build_components(seed: int, source_dir: Path, cfg: dict) -> tuple:
 
 
 def _evaluation_rewards(trainer: PPOTrainer) -> list[float]:
-    """One post-training rollout under the trained policy → per-step rewards.
-
-    The trainer's ``train()`` returns per-iter loss metrics but no per-step
-    reward trace, so we replay one masked rollout here to populate the CSV.
-    Uses ``torch.no_grad`` because no gradient is needed for logging.
-    """
+    """One post-training rollout → per-step rewards (no-grad, CSV-bound)."""
     with torch.no_grad():
         trajectory = trainer.collect_rollout()
     return [float(r) for r in trajectory.rewards.tolist()]
 
 
 def _save_seed_outputs(seed_dir: Path, policy: PolicyNet, payload: dict, rewards: list[float]) -> None:
-    """Persist checkpoint.pt + metrics.json + rewards.csv for one seed.
-
-    ``payload`` carries ``iterations`` + ``initial_betweenness`` +
-    ``final_betweenness`` + ``betweenness_calls`` — the schema consumed
-    by ``scripts/render_betweenness_chart.py`` (F10 deliverable).
-    """
+    """Persist checkpoint.pt + metrics.json + rewards.csv for one seed (F10 schema)."""
     seed_dir.mkdir(parents=True, exist_ok=True)
     torch.save(policy.state_dict(), seed_dir / "checkpoint.pt")
     (seed_dir / "metrics.json").write_text(json.dumps(payload, indent=2, sort_keys=True))
@@ -105,41 +105,37 @@ def _save_seed_outputs(seed_dir: Path, policy: PolicyNet, payload: dict, rewards
 
 
 def _final_reward(rewards: list[float]) -> float:
-    """Final-reward summary: sum of the eval-rollout reward sequence.
-
-    Sum (not last-step) so a longer rollout that earns more positive ΔMod
-    or ΔCohesion shows up as a higher score, which is the comparable
-    quantity for cross-seed mean ± std.
-    """
+    """Sum of the eval-rollout reward sequence (cross-seed-comparable scalar)."""
     if not rewards:
         return float("nan")
     return float(sum(rewards))
 
 
-def _run_one_seed(seed: int, args: argparse.Namespace, cfg: dict) -> dict:
-    """Train one seed end-to-end; return its summary row for the aggregate."""
-    _set_global_seeds(seed)
-    env, policy, trainer = _build_components(seed, args.source_dir, cfg)
-    initial_btw = dict(env._initial_betweenness)  # captured by env.__init__ (CALL 1/2)
-    history = trainer.train(args.total_steps)
-    rewards = _evaluation_rewards(trainer)
-    final_btw = env.final_betweenness()  # CALL 2/2 — completes the canonical budget
-    payload = {
+def _build_payload(history: list, initial_btw: dict, final_btw: dict, btw_calls: int) -> dict:
+    """metrics.json schema: iterations + before/after betweenness + call count."""
+    return {
         "iterations": history,
         "num_iterations": len(history),
         "initial_betweenness": initial_btw,
         "final_betweenness": dict(final_btw),
-        "betweenness_calls": int(env.centrality.betweenness_calls),
+        "betweenness_calls": int(btw_calls),
     }
+
+
+def _run_one_seed(seed: int, args: argparse.Namespace, cfg: dict) -> dict:
+    """Train one seed end-to-end; return its summary row for the aggregate."""
+    _set_global_seeds(seed)
+    coeffs = {"alpha": args.alpha, "beta": args.beta, "gamma": args.gamma, "p_skills": args.p_skills}
+    env, policy, trainer = _build_components(seed, args.source_dir, cfg, coeffs=coeffs)
+    initial_btw = dict(env._initial_betweenness)  # captured by env.__init__ (CALL 1/2)
+    history = trainer.train(args.total_steps)
+    rewards = _evaluation_rewards(trainer)
+    final_btw = env.final_betweenness()  # CALL 2/2 — completes the canonical budget
+    btw_calls = env.centrality.betweenness_calls
+    payload = _build_payload(history, initial_btw, final_btw, btw_calls)
     _save_seed_outputs(args.output_dir / f"seed_{seed}", policy, payload, rewards)
     final = _final_reward(rewards)
-    logger.info(
-        "seed=%d final_reward=%.6f steps=%d btw_calls=%d",
-        seed,
-        final,
-        args.total_steps,
-        env.centrality.betweenness_calls,
-    )
+    logger.info("seed=%d final_reward=%.6f steps=%d btw_calls=%d", seed, final, args.total_steps, btw_calls)
     return {"seed": seed, "final_reward": final, "num_reward_points": len(rewards)}
 
 

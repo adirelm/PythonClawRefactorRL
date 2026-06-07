@@ -53,9 +53,7 @@ def test_env_is_not_gym_env(tiny_source_tree: Path) -> None:
     """Brief §2.2 ban: no gymnasium inheritance / API leakage."""
     env = SkillsGraphEnv(tiny_source_tree, seed=42)
     base_names = [cls.__module__ for cls in type(env).__mro__]
-    assert not any("gymnasium" in m or m.startswith("gym.") for m in base_names), (
-        f"SkillsGraphEnv MRO leaks gymnasium: {base_names}"
-    )
+    assert not any("gymnasium" in m or m.startswith("gym.") for m in base_names), base_names
     # And the module itself must not bind a `gymnasium` symbol.
     assert "gymnasium" not in {*getattr(env_mod, "__dict__", {}).keys()}
 
@@ -76,32 +74,24 @@ def test_step_returns_state_reward_done_info_quadruple(tiny_source_tree: Path) -
     env = SkillsGraphEnv(tiny_source_tree, seed=42)
     env.reset()
     result = env.step(_noop())
-    assert isinstance(result, tuple) and len(result) == 4, (
-        f"step() must return a 4-tuple, got len={len(result)}"
-    )
+    assert isinstance(result, tuple) and len(result) == 4, f"got len={len(result)}"
     state, reward, done, info = result
-    assert isinstance(state, State)
-    assert isinstance(reward, float)
-    assert isinstance(done, bool)
-    assert isinstance(info, dict)
+    assert isinstance(state, State) and isinstance(reward, float)
+    assert isinstance(done, bool) and isinstance(info, dict)
     assert info["step"] == 1
 
 
 def test_betweenness_called_at_init(tiny_source_tree: Path) -> None:
     """CALL 1 of 2 per seed lands inside ``__init__`` (training-start anchor)."""
     env = SkillsGraphEnv(tiny_source_tree, seed=42)
-    assert env.centrality.betweenness_calls == 1, (
-        "training-start betweenness must fire exactly once during __init__"
-    )
+    assert env.centrality.betweenness_calls == 1, "training-start betweenness must fire once"
 
 
 def test_betweenness_called_at_final(tiny_source_tree: Path) -> None:
     """CALL 2 of 2 per seed lands inside ``final_betweenness()`` (end anchor)."""
     env = SkillsGraphEnv(tiny_source_tree, seed=42)
     _ = env.final_betweenness()
-    assert env.centrality.betweenness_calls == 2, (
-        "training-end betweenness must bump the counter to exactly 2"
-    )
+    assert env.centrality.betweenness_calls == 2, "training-end betweenness must bump to 2"
     # Third call must be refused — protects the canonical budget.
     with pytest.raises(RuntimeError, match="exceeded"):
         env.final_betweenness()
@@ -111,9 +101,7 @@ def test_done_when_max_steps_reached(tiny_source_tree: Path) -> None:
     env = SkillsGraphEnv(tiny_source_tree, seed=42, max_episode_steps=3)
     env.reset()
     flags = [env.step(_noop())[2] for _ in range(3)]
-    assert flags == [False, False, True], (
-        f"done flags must be False,False,True at max_episode_steps=3; got {flags}"
-    )
+    assert flags == [False, False, True], f"got {flags}"
 
 
 def test_done_when_too_few_nodes(tiny_source_tree: Path, monkeypatch) -> None:
@@ -132,9 +120,7 @@ def test_action_mask_has_canonical_shape(tiny_source_tree: Path) -> None:
     env = SkillsGraphEnv(tiny_source_tree, seed=42)
     mask = env.get_action_mask()
     assert isinstance(mask, torch.Tensor)
-    assert mask.shape == (A_MAX_TOTAL,) == (45057,), (
-        f"mask shape must equal canonical A_max=(45057,); got {tuple(mask.shape)}"
-    )
+    assert mask.shape == (A_MAX_TOTAL,) == (45057,), f"got {tuple(mask.shape)}"
     assert bool(mask[-1].item()) is True, "NOOP slot must always be legal"
 
 
@@ -156,6 +142,24 @@ def test_step_produces_nonzero_reward_when_action_changes_graph() -> None:
     assert info["history_len"] == 8, "all 8 SPLIT actions must be recorded in history"
 
 
+def test_step_uses_reward_coeff_overrides(tiny_source_tree: Path, monkeypatch) -> None:
+    """AB-PLUMB: reward_* kwargs must flow into compute_reward via env.step."""
+    captured: dict = {}
+
+    def _fake(gb, ga, *, lazy_load_broken=False, **kw):
+        captured.update(kw)
+        return RewardComponents(0.0, 0.0, 0.0, 0.0, 42.0)
+
+    monkeypatch.setattr("src.env.skills_graph_env.compute_reward", _fake)
+    env = SkillsGraphEnv(
+        tiny_source_tree, seed=42,
+        reward_alpha=2.5, reward_beta=3.5, reward_gamma=0.25, reward_p_skills=-7.0,
+    )
+    env.reset()
+    assert env.step(_noop())[1] == 42.0
+    assert captured == {"alpha": 2.5, "beta": 3.5, "gamma": 0.25, "p_skills": -7.0}
+
+
 def test_compute_reward_uses_canonical_coeffs(monkeypatch: pytest.MonkeyPatch) -> None:
     """compute_reward picks alpha/beta/gamma/P_skills from config and returns
     a non-zero RewardComponents when metrics move between snapshots.
@@ -171,11 +175,7 @@ def test_compute_reward_uses_canonical_coeffs(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setitem(sys.modules, "src.services.metrics", fake)
     out = compute_reward(before, after)
     assert isinstance(out, RewardComponents)
-    assert (out.delta_modularity, out.delta_cohesion, out.coupling_penalty, out.p_skills_term) == (
-        pytest.approx(0.5),
-        pytest.approx(0.2),
-        pytest.approx(0.4),
-        0.0,
-    )
+    actual = (out.delta_modularity, out.delta_cohesion, out.coupling_penalty, out.p_skills_term)
+    assert actual == (pytest.approx(0.5), pytest.approx(0.2), pytest.approx(0.4), 0.0)
     # 1.0*0.5 + 1.0*0.2 - 0.5*0.4 = 0.5
     assert out.total == pytest.approx(0.5) and out.total != 0.0
