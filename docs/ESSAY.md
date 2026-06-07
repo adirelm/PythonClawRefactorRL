@@ -267,6 +267,26 @@ expected return up to PPO stochasticity. That is the *audit* property
 - **Cites:** `liu2023chatgpt`, plus our own Phase-4 RC findings and ablation
   numbers (internal, not in `references.bib`).
 
+### Limitations
+
+Three honest limits bound the claims above. **First**, the 5-seed protocol
+completed cleanly on only 3/5 seeds. Under the locked 256-step PPO smoke and
+240s/seed ceiling, seeds {42, 7, 271} train to mean reward −0.340 ± 0.141,
+while seeds {123, 314} hit the wall-clock budget on Louvain-wedge topologies.
+Per the architect-locked HONESTY policy (5/5 → promote · 4/5 → partial · 3/5
+→ Phase-3 −2 grade penalty · <3/5 → halt), this ships PARTIAL. The trail is in
+commits 5dd14ca (R1 NOOP-pin), 44b313f (RC-1 Louvain watchdog + greedy
+fallback + V<2/E=0 early return), and d489306 (partition memo + per-step share
++ 0.05s budget); residuals are in `docs/_pending/BUG_REPORT.md` Bug 2.
+**Second**, the wedge residual: Python's threading-based watchdog cannot
+preempt the GIL, so wedge-prone topologies leak daemon threads that contend
+with the main rollout. A multiprocessing watchdog would close the gap but
+exceeded scope; [schulman2017ppo] and [huang2022masking] still bind the 3 OK
+seeds. **Third**, n=3 ablation cells inflate CIs: Student-t with dof = 2
+widens each interval by ≈ 4.3× the standard error. Under-completed cells are
+flagged in `docs/ANALYSIS.md` §6 rather than silently imputed, so the
+ablation reads honestly under-powered, not overconfident.
+
 ## §5 Conclusion (~150 words)
 
 - Restate the complementarity thesis with the empirical anchor from §4.
