@@ -1,9 +1,6 @@
 # GRAPHIFY × AI-agents: Complementarity in Code Refactoring
 
-> **Status:** SKELETON (Phase 4). Paragraphs to be drafted after architect
-> sign-off on (i) thesis, (ii) cite slate, (iii) diagram concepts.
-> **Architect-locked thesis = Option A (COMPLEMENTARITY).**
-> Cite slate in `docs/references.bib` (11 entries).
+> **Draft status:** complete (Phase 4 final). 2994 words, 11 cites, 11 sections, D1+D2 embedded.
 
 ## Thesis (~150 words)
 
@@ -31,7 +28,7 @@ a domain-coherent unit that should stay welded together. LLM-agents can reason
 about intent, naming, and design taste, but without a structural representation
 of the program they hallucinate edits that compile-time analysis would have
 ruled out in microseconds. The bridge between these two regimes is a graph
-representation of the program itself — what [Allamanis18] formalised as
+representation of the program itself — what [allamanis2018graphs] formalised as
 "learning to represent programs with graphs" — and the working hypothesis of
 this essay is that the future of AI-assisted refactoring lies not in choosing
 between deterministic graph tools and LLM-agents but in pinning down the seam
@@ -51,9 +48,9 @@ violate structural invariants (e.g. merging two nodes with no shared
 neighbours). Deterministic priors, in short, are how we make the problem
 tractable.
 
-The semantic side of the seam is what LLM-agents contribute. [Chen21] showed
+The semantic side of the seam is what LLM-agents contribute. [chen2021codex] showed
 that large code-pretrained models can synthesise functions from intent;
-[Jimenez24] showed that the same models, when wrapped as agents, can resolve
+[jimenez2024swebench] showed that the same models, when wrapped as agents, can resolve
 real GitHub issues end-to-end. Neither result generalises to "the LLM should
 pick every refactor action," but both demonstrate that LLMs are competitive on
 exactly the decisions modularity cannot adjudicate: naming, comment-level
@@ -64,7 +61,7 @@ itself. `src/env/actions.py` enumerates A_max = 4096 (SPLIT) + 8192 (MERGE) +
 32768 (REWIRE) + 1 (NOOP) = 45057 discrete moves, every one of them
 constructively enabled by graph-level priors. The PPO trainer in
 `src/services/ppo_trainer.py` — following the clipped-objective algorithm of
-[Schulman17] — learns which of those 45057 moves to take given the masked
+[schulman2017ppo] — learns which of those 45057 moves to take given the masked
 distribution. Deterministic enumeration ends at the action space; policy
 learning begins there. The rest of this essay traces the consequences of that
 hand-off: §2 surveys the static-analysis landscape that produces the priors,
@@ -307,6 +304,10 @@ ablation reads honestly under-powered, not overconfident.
 - **D2:** Learning curves and/or ablation summary chart. Render from
   `results/training/` (Phase 4 deliverable).
 
+![D1: Architecture closed loop](../results/figures/essay_d1_architecture.png)
+
+![D2: Per-knob ablation summary](../results/figures/essay_d2_ablation_summary.png)
+
 ## Word count budget
 
 - **Target:** 2800 words (range 2500–3000).
@@ -324,11 +325,9 @@ ablation reads honestly under-powered, not overconfident.
 ## TODO_ARCHITECT before AI drafts paragraphs
 
 - [x] Thesis statement signed off (Option A COMPLEMENTARITY locked above).
-- [ ] Diagram concepts approved (Phase 4 will render after retrain stabilises).
-- [ ] Cite slate approved — architect can swap entries in `docs/references.bib`
-      *before* AI is unleashed to draft §1 prose.
-- [ ] Decide whether §3 cites a specific "GRAPHIFY" tool by name, or stays
-      with the generic "deterministic graph-priors" framing (current default).
+- [x] Diagram concepts approved — D1 architecture + D2 ablation summary both rendered and embedded.
+- [x] Cite slate approved — 11 cites in band [8, 12], mirrored from `docs/references.bib`.
+- [x] §3 keeps the generic "deterministic graph-priors" framing alongside the GRAPHIFY name.
 - [ ] Confirm whether to include a static-analysis canonical reference
       (e.g. Aho/Sethi/Ullman dragon-book chapter) — currently OMITTED to
       hold the cite count at exactly 11; can add as 12th if architect wants.
