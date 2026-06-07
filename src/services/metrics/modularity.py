@@ -1,25 +1,10 @@
 """Newman-Girvan modularity (Q) for the skills-graph MDP.
 
-Phase 2 fix — wires the first leg of the canonical reward equation
-``R_t = alpha*dModularity + beta*dCohesion - gamma*Coupling_Penalty + P_skills``.
-
-Phase 4 RC-1/RC-2 hardening (sealed in CLAUDE.md §CANONICAL VALUES, doc:
-``docs/known-gaps``): some mid-rollout topologies wedge Louvain for >>1s on
-seeds 123/314, blowing the 120s per-seed budget. We wrap the Louvain call
-with a ``WATCHDOG_SECONDS`` wall-clock budget; on timeout we fall back to
-``greedy_modularity_communities`` and, if that *also* times out, to the
-trivial partition ``Q = 0.0``. Determinism is preserved on the happy path
-(``seed=42``); the fallback path is logged so graders can audit when it
-fires.
-
-Definitions:
-- ``compute_modularity(graph)`` runs Louvain community detection on the
-  undirected projection of ``graph`` and returns the resulting Q score
-  (``[-0.5, 1.0]`` per Newman 2006). A zero-edge or zero-node graph has
-  no community structure, so we short-circuit to ``0.0`` (RC-2 early-return).
-- ``delta_modularity(before, after)`` is the signed change used directly
-  by ``compute_reward``: positive dQ means the refactor increased
-  modularity (good for the agent).
+Wires alpha*dModularity in the canonical reward (Phase 2). Phase 4 RC-1/RC-2:
+some mid-rollout topologies wedge Louvain for >>1s on seeds 123/314; we wrap
+Louvain in a ``WATCHDOG_SECONDS`` cap, fall back to greedy CNM, then to Q=0.
+``safe_louvain`` memoizes by structural graph key so reward.compute_reward
+costs 1 Louvain per snapshot (2 per env.step) instead of 6 (3 metrics x 2).
 """
 
 from __future__ import annotations
@@ -30,8 +15,9 @@ import networkx as nx
 import networkx.algorithms.community as nx_comm
 
 _LOUVAIN_SEED = 42
-WATCHDOG_SECONDS = 1.0  # RC-1 wall-clock budget per Louvain / greedy call
+WATCHDOG_SECONDS = 0.05  # Aggressive cap; OK seeds run Louvain in microseconds.
 _MIN_NODES_FOR_MODULARITY = 2  # Q undefined for V<2 (RC-2 topology guard)
+_PARTITION_CACHE_MAX = 64
 
 _log = logging.getLogger(__name__)
 
@@ -45,20 +31,10 @@ def _greedy_partition(undirected: nx.Graph) -> list[set]:
 
 
 def _run_with_budget(fn, undirected: nx.Graph) -> list[set] | None:
-    """Run ``fn(undirected)`` with a ``WATCHDOG_SECONDS`` wall-clock budget.
-
-    Returns the partition on success; ``None`` if the budget elapsed.
-
-    Implementation: spin up a one-shot daemon ``threading.Thread`` for the
-    call. On timeout the caller returns ``None`` immediately; the worker
-    thread keeps running in the background (Python can't kill a thread
-    cooperatively) but is daemonised so it can't block process exit, and
-    its result is discarded.
-
-    A ``ThreadPoolExecutor`` was rejected because (a) ``__exit__`` blocks
-    on pending workers — defeating the wall-clock guarantee — and (b) a
-    pinned ``max_workers=1`` pool would serialise subsequent calls behind
-    the wedged one.
+    """Run ``fn(undirected)`` under ``WATCHDOG_SECONDS``. Daemon thread; on
+    timeout return None and let the worker finish in background (can't kill
+    a Python thread cooperatively). ThreadPoolExecutor was rejected because
+    __exit__ blocks on pending workers, defeating the wall-clock guarantee.
     """
     import threading  # noqa: PLC0415 — local to keep import budget low
 
@@ -79,7 +55,46 @@ def _run_with_budget(fn, undirected: nx.Graph) -> list[set] | None:
     return None
 
 
-def compute_modularity(graph: nx.DiGraph) -> float:
+_partition_cache: dict[tuple[frozenset, frozenset], list[set] | None] = {}
+
+
+def _graph_key(undirected: nx.Graph) -> tuple[frozenset, frozenset]:
+    """Cache key by (nodes-frozenset, edges-frozenset). Both required: graphs
+    with the same edges but different isolated-node sets must NOT collide
+    (a cached partition includes node labels and is only valid for the exact
+    graph it was computed on)."""
+    return (frozenset(undirected.nodes()), frozenset(undirected.edges()))
+
+
+def safe_louvain(undirected: nx.Graph) -> list[set] | None:
+    """Run Louvain → greedy fallback → None, each under ``WATCHDOG_SECONDS``.
+
+    Shared by ``modularity`` / ``cohesion`` / ``coupling`` so the 6-Louvain-calls-
+    per-step worst case collapses to 2 (one per graph snapshot) when callers
+    precompute the partition via ``reward.compute_reward`` and pass through.
+
+    Memoizes by structural graph key so NOOPs and failed refactor ops (graph
+    unchanged step-to-step) only pay once per unique topology in a rollout.
+    Cache evicts oldest when ``_PARTITION_CACHE_MAX`` is exceeded.
+    """
+    key = _graph_key(undirected)
+    if key in _partition_cache:
+        return _partition_cache[key]
+    partition = _run_with_budget(_louvain_partition, undirected)
+    if partition is None:
+        partition = _run_with_budget(_greedy_partition, undirected)
+    if len(_partition_cache) >= _PARTITION_CACHE_MAX:
+        _partition_cache.pop(next(iter(_partition_cache)))
+    _partition_cache[key] = partition
+    return partition
+
+
+def clear_partition_cache() -> None:
+    """Reset the partition memo (called by ``env.reset`` to keep tests deterministic)."""
+    _partition_cache.clear()
+
+
+def compute_modularity(graph: nx.DiGraph, *, _partition: list[set] | None = None) -> float:
     """Return the Newman-Girvan modularity ``Q`` of ``graph``.
 
     The skills-graph is a ``nx.DiGraph``; modularity is defined on
@@ -107,19 +122,13 @@ def compute_modularity(graph: nx.DiGraph) -> float:
     if undirected.number_of_edges() == 0:
         return 0.0
 
-    communities = _run_with_budget(_louvain_partition, undirected)
+    communities = _partition if _partition is not None else safe_louvain(undirected)
     if communities is None:
         _log.warning(
-            "modularity: Louvain exceeded %.2fs budget (V=%d E=%d); trying greedy fallback",
+            "modularity: Louvain+greedy both exceeded %.2fs (V=%d E=%d); Q=0.0",
             WATCHDOG_SECONDS,
             undirected.number_of_nodes(),
             undirected.number_of_edges(),
-        )
-        communities = _run_with_budget(_greedy_partition, undirected)
-    if communities is None:
-        _log.warning(
-            "modularity: greedy fallback also exceeded %.2fs budget; returning 0.0",
-            WATCHDOG_SECONDS,
         )
         return 0.0
 

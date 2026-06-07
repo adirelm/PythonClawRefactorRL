@@ -95,9 +95,34 @@ def compute_reward(  # noqa: PLR0913 - signature dictated by canonical reward eq
         compute_modularity,
     )
 
-    delta_modularity = float(compute_modularity(graph_after) - compute_modularity(graph_before))
-    delta_cohesion = float(compute_cohesion(graph_after) - compute_cohesion(graph_before))
-    coupling_penalty = float(compute_coupling(graph_after) - compute_coupling(graph_before))
+    # RC-1 optimization: compute Louvain partition once per snapshot and pass
+    # to all 3 metrics so a wedge-prone graph costs <=2 watchdog timeouts per
+    # env.step (one for before, one for after) instead of 6 (3 metrics x 2).
+    # Tests monkey-patch src.services.metrics with stub functions; in that
+    # case the modularity submodule import fails and we fall through to the
+    # legacy per-metric path (partitions stay None).
+    try:
+        from src.services.metrics.modularity import safe_louvain  # noqa: PLC0415
+
+        part_before = safe_louvain(graph_before.to_undirected()) if graph_before.number_of_edges() else None
+        part_after = safe_louvain(graph_after.to_undirected()) if graph_after.number_of_edges() else None
+    except (ImportError, AttributeError):
+        part_before = None
+        part_after = None
+
+    # Only pass _partition when computed (test stubs don't accept the kwarg).
+    after_kw = {} if part_after is None else {"_partition": part_after}
+    before_kw = {} if part_before is None else {"_partition": part_before}
+
+    delta_modularity = float(
+        compute_modularity(graph_after, **after_kw) - compute_modularity(graph_before, **before_kw)
+    )
+    delta_cohesion = float(
+        compute_cohesion(graph_after, **after_kw) - compute_cohesion(graph_before, **before_kw)
+    )
+    coupling_penalty = float(
+        compute_coupling(graph_after, **after_kw) - compute_coupling(graph_before, **before_kw)
+    )
     p_skills_term = ps if lazy_load_broken else 0.0
 
     total = a * delta_modularity + b * delta_cohesion - g * coupling_penalty + p_skills_term

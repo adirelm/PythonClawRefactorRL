@@ -25,19 +25,31 @@ re-exports either symbol.
 
 from __future__ import annotations
 
+import logging
+
 import networkx as nx
-import networkx.algorithms.community as nx_comm
+
+from src.services.metrics.modularity import safe_louvain
 
 _LOUVAIN_SEED = 42  # sealed in CLAUDE.md §CANONICAL VALUES for reproducibility
 
+_log = logging.getLogger(__name__)
 
-def compute_coupling_penalty(graph: nx.DiGraph) -> float:
+
+def compute_coupling_penalty(graph: nx.DiGraph, *, _partition: list[set] | None = None) -> float:
     """Return the fraction of edges that cross Louvain communities.
 
     The directed graph is projected to its undirected counterpart before
     Louvain runs (Louvain is defined for undirected graphs). An empty
     edge set returns ``0.0`` - there are no cross-community edges by
     definition when there are no edges at all.
+
+    Phase 4 RC-1: the Louvain call here shares the same wedge surface as
+    ``modularity.compute_modularity`` — on mid-rollout snapshots from
+    seeds 123/314 it can block for many seconds. We delegate to the
+    shared ``_run_with_budget`` watchdog. On Louvain timeout we try
+    ``greedy_modularity_communities``; on second timeout we surrender
+    and return ``0.0`` so the env.step caller never blocks.
 
     Args:
         graph: Snapshot of the live PythonClaw Skills graph.
@@ -58,7 +70,15 @@ def compute_coupling_penalty(graph: nx.DiGraph) -> float:
         # (e.g. all self-loops on a MultiDiGraph), treat it as no-edges.
         return 0.0
 
-    communities = nx_comm.louvain_communities(undirected, seed=_LOUVAIN_SEED)
+    communities = _partition if _partition is not None else safe_louvain(undirected)
+    if communities is None:
+        _log.warning(
+            "coupling: Louvain+greedy both exceeded watchdog (V=%d E=%d); coupling=0.0",
+            undirected.number_of_nodes(),
+            undirected.number_of_edges(),
+        )
+        return 0.0
+
     node_to_comm: dict[object, int] = {
         node: idx for idx, community in enumerate(communities) for node in community
     }
