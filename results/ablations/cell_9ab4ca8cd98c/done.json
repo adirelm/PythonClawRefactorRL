@@ -1,0 +1,43 @@
+{
+  "alpha": 0.5,
+  "beta": 2.0,
+  "cell_sha": "9ab4ca8cd98c",
+  "ci95": 0.23627831359458923,
+  "gamma": 1.0,
+  "mean": -0.33312499299645426,
+  "n_ok": 5,
+  "p_skills": -10.0,
+  "seed_outcomes": [
+    {
+      "elapsed_s": 8.690163667022716,
+      "final_reward": -0.21999991545453668,
+      "seed": 42,
+      "status": "ok"
+    },
+    {
+      "elapsed_s": 9.24840033298824,
+      "final_reward": -0.15812505222856998,
+      "seed": 7,
+      "status": "ok"
+    },
+    {
+      "elapsed_s": 9.73817050002981,
+      "final_reward": -0.47000002209097147,
+      "seed": 123,
+      "status": "ok"
+    },
+    {
+      "elapsed_s": 10.05545445799362,
+      "final_reward": -0.5974999102763832,
+      "seed": 314,
+      "status": "ok"
+    },
+    {
+      "elapsed_s": 9.13786054198863,
+      "final_reward": -0.2200000649318099,
+      "seed": 271,
+      "status": "ok"
+    }
+  ],
+  "total_steps": 256
+}

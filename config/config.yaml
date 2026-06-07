@@ -57,8 +57,8 @@ paths:
   ablation_dir: "results/ablation/"
 
 ablation:
-  # COMPACT grid: 3 values per knob, 3 seeds/cell, 256 steps/seed.
-  # Smoke runs in ~30 min wall-clock on M-series (3 cells/min after RC-1).
+  # COMPACT grid: 3 values per knob, 5 seeds/cell, 256 steps/seed.
+  # Smoke runs in ~80 min wall-clock on M-series after RC-4 (SIGALRM Louvain cut).
   grids:
     compact:
       alpha:    [0.5, 1.0, 2.0]
@@ -70,7 +70,7 @@ ablation:
       beta:     [1.0]
       gamma:    [0.5]
       p_skills: [-5.0]
-  scout_seeds: [42, 7, 271]     # 3 OK seeds (post-RC-1; 123/314 wedged in 2/5 TIMEOUT)
+  scout_seeds: [42, 7, 123, 314, 271]  # all 5 sealed seeds (RC-4 closed the 123/314 hang)
   total_steps_per_cell_seed: 256
   per_seed_timeout_s: 240
-  cell_timeout_s: 900           # 3 seeds × 240s + slack
+  cell_timeout_s: 1500          # 5 seeds × 240s + slack

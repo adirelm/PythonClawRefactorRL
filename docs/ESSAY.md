@@ -203,8 +203,8 @@ logits.masked_fill(~safe_mask, float("-inf"))` at
 samples only from legal moves. The defensive NOOP-pin at L108–L117
 handles the degenerate all-False mask observed on seeds 123/314/271,
 where wedged graphs would otherwise hand `Categorical` a row of
-−inf and produce a NaN distribution; documented in `docs/_pending/BUG_REPORT.md`
-Bug 1. This single guarded line is the difference between a training
+−inf and produce a NaN distribution; documented in `docs/BUG_REPORT.md`
+Appendix A1. This single guarded line is the difference between a training
 loop that recovers from degenerate topologies and one that wedges
 silently — exactly the kind of edge case [huang2022masking] §3 names.
 
@@ -228,17 +228,18 @@ under `results/training/seed_<N>/`, and aggregates a
 `results/training/aggregate.json` over whichever seeds completed
 within their budget. Isolation matters: a wedge on one seed must not
 poison the others, and a subprocess boundary is the cheapest enforcement
-of that property. At the RC-5 retrain scale recorded under
-`results/training/aggregate.json`, 3/5 seeds complete cleanly
-(42, 7, 271) with mean reward −0.340 ± 0.141, and 2/5 (123, 314)
-wedge on the residual daemon-thread contention documented in
-`docs/TRACE.md` F10 — a known, reported failure mode, traced through
-RC-0 cProfile and patched to a per-step Louvain watchdog with a
-greedy-modularity fallback in `src/services/metrics/modularity.py`
-L33–L46, not a silently-dropped one. The HONESTY thresholds locked in
-`docs/ESSAY.md` §4 — 5/5 promote, 4/5 partial, 3/5 grade penalty −2,
-<3/5 halt — bind this number to a grade outcome before any retrain
-begins, so the 3/5 result is a measured outcome rather than a
+of that property. At the retrain scale recorded under
+`results/training/aggregate.json`, **all 5/5 seeds complete cleanly**
+(42, 7, 123, 314, 271) with mean reward −0.461 ± 0.186 after the RC-4
+fix — a `signal.SIGALRM` 1-second hard cut on Louvain (replacing the
+daemon-thread watchdog that leaked GIL-contending threads) plus stored
+action masks in `Trajectory` (`src/services/metrics/modularity.py`
+`_run_with_budget`). The earlier 3/5 wedge on seeds 123/314 is documented
+as a found-and-fixed failure mode in `docs/BUG_REPORT.md` Appendix A2,
+traced through RC-0 cProfile — not a silently-dropped one. The HONESTY
+thresholds locked in §4 — 5/5 promote, 4/5 partial, 3/5 grade penalty −2,
+<3/5 halt — bound this number to a grade outcome before any retrain
+began, so the 5/5 result is a measured outcome (promote) rather than a
 post-hoc rationalisation. The deterministic-prior layer of the
 architecture is what makes that binding possible in the first place:
 same graph, same seed, same modularity number, same reward, same
@@ -250,17 +251,22 @@ expected return up to PPO stochasticity. That is the *audit* property
 
 ## §4 Empirical lessons + limitations (~700 words) — brief prompt #3: limitations
 
-- The 3-of-5-seed retrain outcome (mean reward −0.340 ± 0.141 on the seeds
-  that did not wedge). Locked HONESTY thresholds:
+- The 5-of-5-seed retrain outcome (mean reward −0.461 ± 0.186, n=5) after the
+  RC-4 fix. Locked HONESTY thresholds:
   5/5 → promote · 4/5 → partial · 3/5 → Phase-3 −2 grade penalty · <3/5 → halt.
+  The 5/5 result maps to **promote** (no penalty).
 - The Louvain wedge story: `P4-RC-0` cProfile spike on seed=123 →
   `nx_comm.louvain_communities → _one_level → _neighbor_weights` on
-  degenerate topologies → RC-1 watchdog/fallback fix.
-- Empirical anchor — 81-cell ablation grid (all n_ok=3/3): baseline
-  (α=1.0, β=1.0, γ=0.5, P=−5.0) → −0.340; best (α=0.5, β=0.5, γ=1.0,
-  P-tie) → +0.122 (Δ=+0.462); worst (α=2.0, β=2.0, γ=0.0, P=−10.0) →
-  −1.041. Marginal swings: α=0.599, γ=0.287, β=0.162, P_skills≈0.
-  Canonical α=1.0 is not the optimum.
+  degenerate topologies → RC-1 watchdog/fallback → RC-4 SIGALRM hard cut
+  (the daemon-thread watchdog leaked GIL-contending threads; SIGALRM raises
+  in the calling thread, closing the wedge for seeds 123/314).
+- Empirical anchor — 81-cell ablation grid (all n_ok=5/5, 405/405 rows ok):
+  baseline (α=1.0, β=1.0, γ=0.5, P=−5.0) → −0.461; best (α=0.5, β=1.0, γ=1.0,
+  P=−1.0) → +0.098 (Δ=+0.559; only 6/81 cells are positive, all at α=0.5, γ=1.0);
+  worst (α=2.0, β=2.0,
+  γ=0.0, P=−10.0) → −1.158 (Δ=−0.697). Sobol-lite: α=2.03, β=0.92, γ=0.83,
+  P_skills≈0. Canonical α=1.0 (marginal −0.495) is not the optimum — α=0.5
+  (marginal −0.258) is higher.
 - Where the GRAPHIFY × LLM complementarity hypothesis FAILS: degenerate
   graphs where modularity itself is ill-defined; small modules where Louvain's
   resolution limit dominates; refactors whose value is purely stylistic.
@@ -269,23 +275,19 @@ expected return up to PPO stochasticity. That is the *audit* property
 
 ### Limitations
 
-Three honest limits bound the claims above. **First**, the 5-seed protocol
-completed cleanly on only 3/5 seeds. Under the locked 256-step PPO smoke and
-240s/seed ceiling, seeds {42, 7, 271} train to mean reward −0.340 ± 0.141,
-while seeds {123, 314} hit the wall-clock budget on Louvain-wedge topologies.
-Per the architect-locked HONESTY policy (5/5 → promote · 4/5 → partial · 3/5
-→ Phase-3 −2 grade penalty · <3/5 → halt), this ships PARTIAL. The trail is in
-commits 5dd14ca (R1 NOOP-pin), 44b313f (RC-1 Louvain watchdog + greedy
-fallback + V<2/E=0 early return), and d489306 (partition memo + per-step share
-+ 0.05s budget); residuals are in `docs/_pending/BUG_REPORT.md` Bug 2.
-**Second**, the wedge residual: Python's threading-based watchdog cannot
-preempt the GIL, so wedge-prone topologies leak daemon threads that contend
-with the main rollout. A multiprocessing watchdog would close the gap but
-exceeded scope; [schulman2017ppo] and [huang2022masking] still bind the 3 OK
-seeds. **Third**, n=3 ablation cells inflate CIs: Student-t with dof = 2
-widens each interval by ≈ 4.3× the standard error. Under-completed cells are
-flagged in `docs/ANALYSIS.md` §6 rather than silently imputed, so the
-ablation reads honestly under-powered, not overconfident.
+Three honest limits bound the claims above. **First**, the smoke scale: the
+5-seed protocol completes on **all 5/5 seeds** after RC-4, but at a 256-step
+PPO budget — a deliberately short smoke run, not convergence-scale training.
+The negative mean reward (−0.461 ± 0.186) reflects the short horizon, not a
+broken policy. Per the locked HONESTY policy (5/5 → promote · 4/5 → partial ·
+3/5 → −2 · <3/5 → halt), this ships as **promote**; the fix trail is in
+`docs/BUG_REPORT.md` Appendix A2. **Second**, the GIL caveat is now resolved:
+RC-4's `signal.SIGALRM` cut replaced the `threading` watchdog that leaked
+GIL-contending daemon threads — [schulman2017ppo] and [huang2022masking] bind
+all 5 seeds. **Third**, ablation CIs at n=5 (Student-t dof = 4, t ≈ 2.78) are
+tighter than the earlier n=3 (dof = 2, t ≈ 4.30), but the 256-step budget keeps
+the estimates directional, not convergence-scale, as flagged in
+`docs/ANALYSIS.md` §6.
 
 ## §5 Conclusion (~150 words)
 

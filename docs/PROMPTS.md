@@ -342,11 +342,15 @@ A_max=45057 boundary) before any drafting.
   > the section's evidence.
 
 ### Phase 4 / commits `1f5765d` + `611d0a6` — ablation infra + plumbing
-- Architect decision: ablation grid is 3×3×3×3 = 81 cells (α, β, γ,
-  P_skills perturbations) × 3 OK seeds × 256 steps. Architect ruled
-  the grid is *compact* (3 OK seeds per cell, not 5) because the
-  honest 3/5 retrain state is the ablation input — sweeping over the
-  2 wedged seeds would be dishonest.
+- Architect decision (at the time): ablation grid is 3×3×3×3 = 81 cells
+  (α, β, γ, P_skills perturbations) × 3 OK seeds × 256 steps — *compact*,
+  3 OK seeds per cell because the then-honest 3/5 retrain state was the
+  ablation input; sweeping over the 2 wedged seeds would have been dishonest.
+  > **SUPERSEDED (RC-4).** Once the RC-4 fix (SIGALRM Louvain cut +
+  > stored-mask Trajectory) closed the seed-123/314 hang, all 5 seeds train
+  > cleanly, so the ablation was re-run at **5 seeds/cell** across all 81
+  > cells (`config.ablation.scout_seeds = [42, 7, 123, 314, 271]`). The
+  > 3-seed framing below is the historical prompt; the live result is n=5.
 - Prompt (verbatim shape):
   > Thread reward coefficients α, β, γ, P_skills through
   > `SkillsGraphEnv.__init__` and `train_ppo` CLI flags. Then

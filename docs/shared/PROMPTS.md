@@ -51,7 +51,7 @@ Every row here is a §1.4 *Human-decided* column entry.
 | Date | Decision |
 |---|---|
 | 2026-06-03 | A3 self-grade target = 93 |
-| 2026-06-04 | A4 self-grade target = 88-92 (honest framing per A1 lesson) |
+| 2026-06-04 | A4 self-grade target = 88-92 (honest framing per A1 lesson) — **SUPERSEDED 2026-06-08**: claim no numeric self-grade (brief does not request one); keep honest limitations only (QUALITY.md / PRD §7) |
 | 2026-06-04 | A4 path: BOOTSTRAP_NOW with vendored PythonClaw shim (ADR-001) |
 | 2026-06-04 | A4 algorithm: PPO+GAE via Stable-Baselines3 (brief §2.3 allows) |
 | 2026-06-04 | A4 env: Custom Training Loop (brief §2.2 bans Gymnasium) |

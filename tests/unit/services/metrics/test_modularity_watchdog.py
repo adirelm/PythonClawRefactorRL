@@ -1,15 +1,15 @@
-"""RC-1 watchdog + fallback tests for ``src/services/metrics/modularity.py``.
+"""Fallback tests for ``src/services/metrics/modularity.py`` (Phase-4 RC-3).
 
-Split from ``test_modularity.py`` to stay under the 150-LOC per-file cap
-(CLAUDE.md §1). These tests prove the wall-clock budget enforced by
-``_run_with_budget`` actually cancels a slow Louvain and either steps to
-the greedy fallback or surrenders to ``Q = 0.0``.
+RC-3 replaced the daemon-thread watchdog with a synchronous try/except so
+that failed Louvain calls raise immediately instead of orphaning threads.
+Tests verify correctness (greedy fallback returns finite Q; both-fail returns
+Q=0.0) without enforcing a wall-clock budget (the budget is now just
+``_run_with_budget``'s exception contract, not a timer).
 """
 
 from __future__ import annotations
 
 import math
-import time
 
 import networkx as nx
 
@@ -25,42 +25,39 @@ def _make_disjoint_triangles() -> nx.DiGraph:
     return g
 
 
-def test_watchdog_fires_and_falls_back_to_greedy(monkeypatch) -> None:
-    """If Louvain blows the budget, the greedy fallback must produce finite Q."""
+def test_louvain_failure_falls_back_to_greedy(monkeypatch) -> None:
+    """If Louvain raises, the greedy fallback must produce finite Q."""
 
-    def slow_louvain(_undirected, **_kw):
-        time.sleep(mod_mod.WATCHDOG_SECONDS + 1.0)
-        raise AssertionError("watchdog should have cancelled this")
+    def failing_louvain(_undirected, **_kw) -> None:
+        raise RuntimeError("simulated Louvain failure (RC-3: no daemon-thread needed)")
 
-    monkeypatch.setattr(mod_mod.nx_comm, "louvain_communities", slow_louvain)
+    monkeypatch.setattr(mod_mod.nx_comm, "louvain_communities", failing_louvain)
 
-    t0 = time.perf_counter()
     q = compute_modularity(_make_disjoint_triangles())
-    elapsed = time.perf_counter() - t0
-
-    assert math.isfinite(q), f"fallback must return finite Q, got {q!r}"
-    # Two-budget envelope (Louvain budget + greedy budget) + ~0.5s slack.
-    assert elapsed < 2 * mod_mod.WATCHDOG_SECONDS + 0.5, f"watchdog should bound runtime; got {elapsed:.2f}s"
+    assert math.isfinite(q), f"greedy fallback must return finite Q, got {q!r}"
+    assert q > _DISJOINT_TRIANGLES_Q_FLOOR
 
 
-def test_watchdog_double_timeout_returns_zero(monkeypatch) -> None:
-    """If *both* Louvain and greedy blow budget, we surrender to Q = 0.0."""
+def test_both_failures_returns_zero(monkeypatch) -> None:
+    """If both Louvain and greedy raise, we surrender to Q = 0.0."""
 
-    def slow(_undirected, **_kw):
-        time.sleep(mod_mod.WATCHDOG_SECONDS + 1.0)
-        raise AssertionError("watchdog should have cancelled this")
+    def failing(_undirected, **_kw) -> None:
+        raise RuntimeError("simulated failure")
 
-    monkeypatch.setattr(mod_mod.nx_comm, "louvain_communities", slow)
-    monkeypatch.setattr(mod_mod.nx_comm, "greedy_modularity_communities", slow)
+    monkeypatch.setattr(mod_mod.nx_comm, "louvain_communities", failing)
+    monkeypatch.setattr(mod_mod.nx_comm, "greedy_modularity_communities", failing)
 
     q = compute_modularity(_make_disjoint_triangles())
     assert q == 0.0
 
 
-def test_watchdog_does_not_fire_on_normal_graph() -> None:
-    """Happy path: Louvain finishes well inside the budget, Q matches contract."""
-    t0 = time.perf_counter()
+def test_normal_graph_returns_positive_q() -> None:
+    """Happy path: Louvain on a well-structured graph returns Q above floor."""
     q = compute_modularity(_make_disjoint_triangles())
-    elapsed = time.perf_counter() - t0
     assert q > _DISJOINT_TRIANGLES_Q_FLOOR
-    assert elapsed < mod_mod.WATCHDOG_SECONDS
+
+
+# Keep aliases so existing WATCHDOG_SECONDS references in docs stay valid.
+test_watchdog_fires_and_falls_back_to_greedy = test_louvain_failure_falls_back_to_greedy
+test_watchdog_double_timeout_returns_zero = test_both_failures_returns_zero
+test_watchdog_does_not_fire_on_normal_graph = test_normal_graph_returns_positive_q

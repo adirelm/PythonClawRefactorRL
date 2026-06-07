@@ -34,6 +34,7 @@ class Trajectory:
     rewards: torch.Tensor  # shape (T,)
     values: torch.Tensor  # shape (T,)
     dones: torch.Tensor  # shape (T,) bool
+    masks: list[Any] | None = None  # shape (T, A_MAX_TOTAL) bool; stored at rollout time, replayed in _eval
 
     def __post_init__(self) -> None:
         t = len(self.states)
@@ -47,6 +48,8 @@ class Trajectory:
                 raise ValueError(f"Trajectory.{name} must have shape ({t},), got {tuple(tensor.shape)}")
         if len(self.actions) != t:
             raise ValueError(f"Trajectory.actions length {len(self.actions)} != states length {t}")
+        if self.masks is not None and len(self.masks) != t:
+            raise ValueError(f"Trajectory.masks length {len(self.masks)} != states length {t}")
 
 
 def compute_gae_advantages(

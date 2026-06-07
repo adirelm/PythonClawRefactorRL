@@ -111,3 +111,11 @@ def test_short_train_run_smoke(trainer: PPOTrainer) -> None:
         for k in _REQUIRED_METRIC_KEYS:
             assert record[k] == record[k], f"NaN in metric {k}: {record}"
         assert record["steps"] >= _SMOKE_N_STEPS
+
+
+def test_collect_rollout_stores_masks(trainer: PPOTrainer) -> None:
+    """Trajectory.masks must be populated (not None) to avoid _eval recomputation."""
+    traj = trainer.collect_rollout()
+    assert traj.masks is not None
+    assert len(traj.masks) == _SMOKE_N_STEPS
+    assert all(m.dtype == torch.bool for m in traj.masks)

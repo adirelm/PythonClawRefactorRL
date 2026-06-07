@@ -1,7 +1,6 @@
 """Custom PPO trainer — no SB3, no gymnasium (brief §2.2). Schulman et al.
 (2017) PPO clipped surrogate against our 4-tuple ``SkillsGraphEnv.step``.
-Canonical (``clip_eps=0.2``, ``gae_lambda=0.95``, ``gamma=0.99``) flow in
-from ``config.ppo`` and are asserted at ``__init__`` so drift fails fast."""
+Canonical (clip_eps=0.2, gae_lambda=0.95, gamma=0.99) from config.ppo; asserted at __init__."""
 
 from __future__ import annotations
 
@@ -65,7 +64,7 @@ class PPOTrainer:
 
     def collect_rollout(self) -> Trajectory:
         """Run ``self.n_steps`` env steps, building a Trajectory."""
-        s_, a_, lp_, r_, v_, d_ = [], [], [], [], [], []
+        s_, a_, lp_, r_, v_, d_, m_ = [], [], [], [], [], [], []
         state, _ = self.env.reset()
         for _ in range(self.n_steps):
             with torch.no_grad():
@@ -79,6 +78,7 @@ class PPOTrainer:
             r_.append(float(reward))
             v_.append(float(value.squeeze().item()))
             d_.append(bool(done))
+            m_.append(amask.squeeze(0))  # store historical mask; replayed in _eval (avoids recompute)
             state = self.env.reset()[0] if done else nxt
         f32 = torch.float32
         return Trajectory(
@@ -88,14 +88,14 @@ class PPOTrainer:
             rewards=torch.tensor(r_, dtype=f32),
             values=torch.tensor(v_, dtype=f32),
             dones=torch.tensor(d_, dtype=torch.bool),
+            masks=m_,
         )
 
     def _eval(self, traj: Trajectory, idxs: list[int]) -> tuple[torch.Tensor, torch.Tensor]:
         lps, vs = [], []
         for i in idxs:
-            # Per-historical-state mask: env state may have advanced past traj.states[i].
-            amask_state = compute_mask(traj.states[i])
-            logits, value, amask = self._fwd(traj.states[i], action_mask=amask_state)
+            stored = traj.masks[i] if traj.masks is not None else compute_mask(traj.states[i])
+            logits, value, amask = self._fwd(traj.states[i], action_mask=stored)
             masked = logits.masked_fill(~amask, float("-inf"))
             lps.append(Categorical(logits=masked).log_prob(torch.tensor([traj.actions[i]])))
             vs.append(value.squeeze(0).squeeze(-1))

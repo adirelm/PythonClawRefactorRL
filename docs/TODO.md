@@ -67,9 +67,10 @@ Every build task is **done** only when **all five** hold:
    regex `^(Phase \d+|Phase 0 bootstrap|chore: bootstrap)` and trailer
    `Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>`.
 
-**Honesty stance.** This TODO contains **no numeric self-grade
-prediction**. The self-grade declared on the cover sheet
-(`adrl-001-ex04.pdf`) is the only place a numeric self-score lives.
+**Honesty stance.** This submission claims **no numeric self-grade** —
+the brief does not request one. The honest self-assessment (strengths +
+bounded limitations L1–L7) lives in `docs/QUALITY.md` §Honest
+self-assessment and `docs/PRD.md` §7.
 Internal docs describe what was built and its honest limitations, not
 what grade it will earn. Per-task evidence pointers describe what runs
 and how it was measured — never "looks good" or "works well".
@@ -219,7 +220,7 @@ bundle that gates Phase 3 closure.
 | T3.4 | PPO trainer — clipped surrogate ε=0.2 (FIXED), value loss, entropy bonus; wraps our 4-tuple `SkillsGraphEnv` directly (NO gymnasium) | ✅ | `src/services/ppo_trainer.py`, commit `71f0213` |
 | T3.5 | Policy net — actor-critic torso, Categorical head, value head V_φ(s) | ✅ | `src/model/policy_net.py`, commit `71f0213` |
 | T3.6 | Encoder — GraphSAGE primary / MLP fallback (V_max=512 FALLBACK only per ADR-004 + ADR-008) | ✅ | `src/model/encoder.py`, commit `71f0213` |
-| T3.7 | Train script — end-to-end PPO rollout on `SkillsGraphEnv` across 5 seeds {42, 7, 123, 314, 271} | 🟡 in-progress | `scripts/train_ppo.py` + isolated-subprocess wrapper `scripts/train_5seed_isolated.py`. Outcome post-rework: **3 of 5 seeds train cleanly** — 42 (final_reward=-0.4400, ~14s), 7 (-0.1407, ~13.5s), 271 (-0.4400, ~13s); each completes 2 PPO iterations × 128 n_steps = 256 total steps, betweenness_calls=2/seed. **2 of 5 seeds (123, 314) hit a SECOND undiagnosed slow path** that emerges in PPO iter 2+ and persists even with R1's NOOP fix and even when each seed runs in its own fresh subprocess — killed by the 120s per-seed wall-clock budget. `aggregate.json` carries `attempted_seeds=[42,7,123,314,271]` and `num_seeds=3` for honest auditability. Phase-4 root-causes the hang. See **Known gaps** below. |
+| T3.7 | Train script — end-to-end PPO rollout on `SkillsGraphEnv` across 5 seeds {42, 7, 123, 314, 271} | ✅ | `scripts/train_ppo.py` + isolated-subprocess wrapper `scripts/train_5seed_isolated.py`. Outcome post-RC-4: **all 5 of 5 seeds train cleanly** — 42 (−0.440), 7 (−0.141), 123 (−0.690), 314 (−0.595), 271 (−0.440); each 2 PPO iterations × 128 n_steps = 256 total steps, betweenness_calls=2/seed, ~10 s each. mean −0.461 ± 0.186 (n=5). `aggregate.json` reports `num_seeds=5`. The seed-123/314 hang was closed by RC-4 (SIGALRM Louvain cut + stored-mask Trajectory). See **Resolved gaps** below. |
 | T3.8 | Obsidian after-refactor hero shot (closes F10 partial → ✅) | ✅ | `results/figures/obsidian_after.png`, commit `71f0213` |
 | T3.9 | Betweenness CI chart + per-seed table — mean ± std + 95% CI across 5 seeds × 2 calls/seed | ✅ | `results/figures/betweenness_ci.png`, `results/data/betweenness_table.csv`, commit `71f0213` |
 
@@ -239,15 +240,28 @@ bundle that gates Phase 3 closure.
 | T03-11 | Render `results/learning_curves/reward_vs_episode.png` (D6) — mean ± 95% CI over ≥5 seeds of episode reward across training; caption names seeds, episode count, and rolling window | Rendering learning-curve PNG (D6) | 3 | +90 | D6,§2.3-run | PNG exists; caption includes seed list, episode count, mean ± 95% CI band; aggregated across ≥5 seeds |
 | T03-12 | Author `tests/test_learning_curve.py` (F16) — assert `results/learning_curves/reward_vs_episode.png` exists after a short training run AND assert ΔReward (final − initial mean) is computed and stored numerically (not just plotted) | Authoring learning-curve test (F16) | 3 | +80 test | F16,D6,D7 | Test fails if PNG missing OR if ΔReward numeric not extractable from results artifact |
 
-## Known gaps (Phase 3 rework, 2026-06-07)
+## Resolved gaps (Phase 4 RC-4, 2026-06-08)
 
-- **5-seed hang (commit 71f0213)**: seeds 123 / 314 / 271 hung in the original 5000-step PPO run because the action_mask went all-False on a degenerate post-rollout graph and `Categorical(logits=all_-inf)` NaN-explodes. Symptom in V5 of Phase 3 validation.
-- **Doc-vs-artifact lie (commit 71f0213)**: aggregate.json honestly reported num_seeds=2 + chart title honestly said "across 2 seeds" — but TRACE F10 / TODO T3.7 were marked "done" claiming 5. Demoted in `6f8b6d6` (R3 of rework).
-- **R1 NOOP-pin fix landed (commit `5dd14ca`)**: defensive NOOP fallback in `PolicyNet.get_action` — if any batch row has an all-False action_mask, the NOOP slot (idx 45056) is forced True before `masked_fill`, preventing `Categorical(-inf)` NaN. **Validated**: 4-case adversarial test (`tests/architecture/test_policy_net_categorical_safe.py`) passes; smoke confirms NOOP-only and all-False masks both return finite action+log_prob in <0.002s without hang.
-- **R2 retrain re-run via isolated-subprocess wrapper (`scripts/train_5seed_isolated.py`, commit `8f96e30`)**: each seed runs in its own fresh Python subprocess with a 120 s hard wall-clock budget; if a seed exceeds the budget it is killed and the outer loop moves on. Outcome: **3 of 5 seeds OK** — 42 (final_reward=-0.4400, 14.0s), 7 (-0.1407, 13.5s), 271 (-0.4400, 12.9s), each with 2 PPO iterations and betweenness_calls=2. **2 of 5 seeds (123, 314) TIMEOUT at 120s** — they spin past iter 1 and wedge in iter 2+ on a SECOND undiagnosed slow path that R1's NOOP fix does NOT address.
-- **Hypothesis-ruled-out**: inter-seed state leak. Each timed-out seed runs in its OWN fresh Python interpreter; no torch / numpy / random RNG state is shared. The hang is reproducible **per-seed** at iter 2+, not a function of "which seed ran first". Earlier observation that "seed_7 hangs after seed_42 finishes" was a coincidence — the actual hang was in iter 4+ (1000-step budget reached deeper iters); at 256 steps (2 iters) seed_7 finishes cleanly.
-- **Phase 4 RC&FIX**: investigate the seed_123 / seed_314 slow path. Hypotheses to test: (a) `update()` doing 4 epochs × N batches × `_eval()` over historical states scales superlinearly when policy converges to a tight distribution; (b) some compute_reward / Louvain / networkx call has pathological behavior on specific graph topologies that those two seeds happen to reach; (c) PyTorch Categorical / masked_fill has a slow path under near-uniform-but-not-quite distributions.
-- **Honest current status**: 3 of 5 seeds OK; `aggregate.json` reports `num_seeds=3` with `attempted_seeds=[42,7,123,314,271]`. F10 betweenness chart + table re-rendered with n=3, dof=2 CI, explicit `n_seeds` column. T3.7 / F10 remain 🟡 in-progress until Phase 4 closes the 123 / 314 slow path and aggregate regenerates with `num_seeds=5`.
+- **5-seed hang — RESOLVED.** Seeds 123/314 originally wedged: first on
+  `Categorical(logits=all_-inf)` (all-False action mask on degenerate graphs),
+  then on a second slow path — Louvain community detection blocking 10-20 s on
+  specific mid-rollout topologies, compounded by daemon-thread GIL contention.
+- **R1 NOOP-pin (`5dd14ca`)**: forces the NOOP slot True before `masked_fill` on
+  any all-False row — kills the `Categorical(-inf)` NaN. Validated by
+  `tests/architecture/test_policy_net_categorical_safe.py` (4 cases).
+- **RC-1 (`44b313f`/`d489306`)**: per-snapshot partition sharing (6→2 Louvain
+  calls/step) + structural-key cache + daemon-thread watchdog. Reduced but did
+  not eliminate the wedge (orphaned threads leaked, contending for the GIL).
+- **RC-4 (current branch) — the decisive fix**: (a) replaced the daemon-thread
+  watchdog with a `signal.SIGALRM` 1-second hard cut that raises in the *calling*
+  thread (no threads, no GIL accumulation) in `src/services/metrics/modularity.py`;
+  (b) stored action masks in `Trajectory` so `_eval` replays them instead of
+  recomputing `compute_mask` ~1024×/PPO update.
+- **Outcome: 5 of 5 seeds OK.** 42 (−0.440), 7 (−0.141), 123 (−0.690),
+  314 (−0.595), 271 (−0.440); mean −0.461 ± 0.186 (n=5), each ~10 s, betweenness
+  calls = 2/seed. `aggregate.json` reports `num_seeds=5`. F10 betweenness chart +
+  table + D6 learning curve re-rendered at n=5. T3.7 / F10 now ✅. The −2 honesty
+  penalty pre-committed for a 3/5 outcome is lifted per PRD §7 (`5/5 → done`).
 
 ## §3.4 Phase 4 — §2.4 Cost + ablations + essay (⬜ pending)
 
@@ -266,7 +280,7 @@ diagrams.
 | T04-06 | Author `notebooks/analysis.ipynb` §Cost + §Ablations + §Essay-summary — consumes SDK only | Authoring notebook §Cost/Ablations | 4 | +200 nb | §2.4-nb | Notebook imports SDK only (no parallel impl); LaTeX blocks precede plots |
 | T04-07 | Author `docs/shared/PROMPTS.md` — verbatim prompts used (architect → implementer trail per §1.4) with human-judgment annotations | Authoring PROMPTS.md | 4 | +200 docs | §1.4 | Every prompt mapped to a commit hash; decisions annotated |
 | T04-08 | Run final gate sweep — ruff clean, all `.py` ≤150 LOC, coverage ≥85%, notebook executes top-to-bottom, no PII matches | Running final gate sweep | 4 | 0 | (gates) | `make check` (or scripted equivalent) exits 0; `grep -E "REDACTED-NAME\|REDACTED-HANDLE\|REDACTED\|REDACTED-ID\|GoogleDrive-REDACTED-HANDLE"` returns zero matches |
-| T04-09 | Export submission PDF `adrl-001-ex04.pdf` (cover sheet is the **only** numeric self-grade location) | Exporting submission PDF | 4 | +0 | (submission) | PDF exists at repo root; cover sheet has self-grade; no other doc has numeric self-grade |
+| T04-09 | Export submission PDF `adrl-001-ex04.pdf` (no numeric self-grade — honest framing per `docs/QUALITY.md` + `docs/PRD.md` §7; brief does not request a self-grade) | Exporting submission PDF | 4 | +0 | (submission) | PDF exists at repo root; carries honest-limitations framing, no 0–100 score |
 | T04-10 | Invite `rmisegal` as read-only collaborator on the A4 GitHub repo; record invitation ID in `docs/SUBMISSION.md` | Inviting rmisegal as read-only collaborator | 4 | +0 | (submission) | Invitation sent with **Read** role; invitation ID recorded |
 | T04-11 | Tag submission commit `assignment-4`, push branch | Tagging submission and pushing branch | 4 | +0 | (submission) | Tag pushed |
 

@@ -3,7 +3,8 @@
 The runner is subprocess-heavy by design — these tests monkey-patch the
 single-seed worker (``_run_seed``) to a synchronous in-process stub so we
 can exercise resume / SHA / seed_table contracts without spending wall-clock
-on actual PPO. The smoke-grid test stays cheap (1 cell × 3 seeds, mocked).
+on actual PPO. The smoke-grid test stays cheap (1 cell × N scout seeds, mocked;
+N is read from config so the test tracks the sealed seed set).
 """
 
 from __future__ import annotations
@@ -19,6 +20,10 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from scripts import _ablation_lib, run_ablation  # noqa: E402
+from src.utils.config_loader import load_config  # noqa: E402
+
+_SCOUT_SEEDS = list(load_config()["ablation"]["scout_seeds"])
+_N_SEEDS = len(_SCOUT_SEEDS)
 
 
 def _fast_run_seed(cell, seed: int, timeout_s: int) -> dict:
@@ -53,14 +58,14 @@ def test_smoke_grid_runs_one_cell(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     # Smoke grid pins (1.0, 1.0, 0.5, -5.0).
     assert payload["alpha"] == 1.0
     assert payload["p_skills"] == -5.0
-    assert payload["n_ok"] == len(payload["seed_outcomes"]) == 3
+    assert payload["n_ok"] == len(payload["seed_outcomes"]) == _N_SEEDS
     # SHA in payload matches the directory name.
     assert cell_dirs[0].name == f"cell_{payload['cell_sha']}"
     # seed_table.csv written with one row per (cell, seed).
     seed_table = tmp_path / "seed_table.csv"
     assert seed_table.exists()
     lines = seed_table.read_text(encoding="utf-8").strip().splitlines()
-    assert len(lines) == 1 + 3  # header + 3 seeds
+    assert len(lines) == 1 + _N_SEEDS  # header + one row per scout seed
 
 
 def test_resume_skips_completed_cells(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -121,7 +126,9 @@ def test_force_reruns_completed_cell(tmp_path: Path, monkeypatch: pytest.MonkeyP
         cfg={
             "ablation": {
                 "grids": {"smoke": {"alpha": [1.0], "beta": [1.0], "gamma": [0.5], "p_skills": [-5.0]}},
-                "scout_seeds": [42, 7, 271],
+                # Must match the real config's scout_seeds so the pre-seeded cell SHA
+                # (which hashes the seed list) matches the one main() computes.
+                "scout_seeds": _SCOUT_SEEDS,
                 "total_steps_per_cell_seed": 256,
             }
         },

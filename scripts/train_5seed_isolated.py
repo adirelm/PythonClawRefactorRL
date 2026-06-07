@@ -23,7 +23,9 @@ from statistics import mean, pstdev
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_SEEDS = [42, 7, 123, 314, 271]
-DEFAULT_TIMEOUT_S = 120
+DEFAULT_TIMEOUT_S = 240  # Phase-4 RC-1 closed the 7h Louvain wedge but seeds 123/314
+# still pay ~50s rollout + ~30s update under aggressive 0.05s watchdog. 240s
+# accommodates worst-case OK + retains headroom for the rare residual wedge.
 DEFAULT_TOTAL_STEPS = 256
 OUTPUT_DIR = REPO_ROOT / "results" / "training"
 _MIN_REWARD_FIELDS = 2  # rewards.csv schema: step,reward

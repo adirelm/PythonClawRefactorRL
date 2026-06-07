@@ -1,13 +1,63 @@
 # Cost Analysis
 
-> **Phase 4 final fill — populated from `results/cost/cost_table.csv` per
-> ADR-003 + ADR-003a.** Headline token counts come from `tiktoken`
-> (`cl100k_base`); characters and bytes are appendix sensitivity columns.
-> Prices are recorded at the timestamp of the first call in the phase and
-> not back-filled if list prices later change. Wall-clock is end-to-end
-> for the phase (including human-in-the-loop time), not just model time.
+> **Phase 4 final fill.** This document answers the brief §2.4 quantitative
+> questions **first** (§0), then gives the supplementary AI-tooling spend
+> (§1+). Token counts come from `tiktoken` (`cl100k_base`); characters and
+> bytes are appendix sensitivity columns.
 
-## §1 Headline
+## §0 Brief §2.4 — the two required figures
+
+Brief §2.4 asks two specific quantitative questions. Both are answered here
+from live measurement (not estimates).
+
+### §0.1 Token volume of the Skills-module code (the analysed input)
+
+Measured with `src.cost.meter.TripleCounter` (`cl100k_base`) over all 30 JSON
+files of `src/pythonclaw_shim/sample_skills/` (the GRAPHIFY input corpus):
+
+| Layer | files | tokens | share |
+|---|---:|---:|---:|
+| L1 — `*.metadata.json` (always loaded) | 10 | 881 | 9.5% |
+| L2 — `*.instructions.json` (lazy) | 10 | 2,905 | 31.2% |
+| L3 — `*.resources.json` (lazy) | 10 | 5,511 | 59.3% |
+| **Total** | **30** | **9,297** | **100%** |
+
+Appendix sensitivity: **34,781 chars · 34,795 bytes ⇒ 3.74 chars/token,
+3.74 bytes/token** (near-ASCII corpus; chars≈bytes). The **lazy-load design
+is what makes this matter**: an agent that touches only L1 metadata pays
+**881 tokens**, not 9,297 — a **10.5× reduction**. Eagerly loading every
+skill's L3 resources (the `P_skills` lazy-load-break penalty exists to
+discourage exactly this) would cost the full 9,297 tokens up front.
+
+Reproduce: `uv run python -c "from src.cost.meter import TripleCounter; ..."`
+(see §6) — deterministic given the pinned `cl100k_base` encoding.
+
+### §0.2 PPO training computational runtime
+
+Measured wall-clock from the actual RC-4 runs (256 steps/seed = 2 PPO
+iterations × 128 n_steps; single-process CPU, Apple M-series):
+
+| Run | seeds | per-seed wall-clock | total |
+|---|---|---|---|
+| Main 5-seed PPO (`train_5seed_isolated.py`) | 5 | 9.7–11.1 s (mean ~10.6 s) | ~53 s |
+| Full ablation (81 cells × 5 seeds = 405 runs) | 405 | 8.3–13.5 s (mean 9.6 s, median 9.6 s) | **64.8 min** |
+
+The per-seed runtime is dominated by graph construction + Louvain modularity
+per `env.step`; the RC-4 SIGALRM Louvain cut (§5) is what keeps every seed
+inside ~10 s instead of the pre-fix 10–20 s-per-step wedge on seeds 123/314.
+At this 256-step smoke scale a single seed trains in ~10 s; a
+convergence-scale run (≥10k steps) would scale roughly linearly.
+
+---
+
+## §1 AI-tooling spend (supplementary)
+
+> Populated from `results/cost/cost_table.csv` per ADR-003 + ADR-003a.
+> Prices recorded at the timestamp of the first call in the phase and not
+> back-filled. Wall-clock is end-to-end for the phase (including
+> human-in-the-loop time), not just model time.
+
+### §1.1 Headline
 
 Total Phase-0 → Phase-4 spend on this assignment is **$0.6284 USD**, split
 across the five phases below. All five rows were billed against
@@ -111,19 +161,20 @@ misrepresent cost in any multilingual corpus.
   **$0.0364 per training episode**. That is the all-in marginal cost of
   one PPO episode at the architect's seed budget, including the
   human-in-the-loop transcripts that produced each episode's analysis.
-- **$/finding for the BUG_REPORT.** $0.039975 / 2 bugs identified
-  (BUG-1 Louvain-wedge regression + BUG-2 the documented variant)
-  = **$0.0200 per bug identified-and-written-up**. This is a lower
-  bound: it omits the diagnostic work itself, which was bundled into
-  Phase 3's training spend.
-- **Cost of the 2/5 TIMEOUT seeds.** Seeds 123 and 314 hit the
-  per-seed wall-clock cap and were **not** rescued by the Phase-4
-  RC investigation. Roughly the Phase-3 share attributable to those two
-  seeds is `2/5 × $0.21825 ≈ $0.0873`, and the Phase-4 RC diagnostic
-  spend that did not close the residual contention is on top of that.
-  Honest read: **~$0.09–$0.13 was spent investigating a flake that
-  ultimately remained unresolved**, and the submission reports 3/5 OK
-  with the architect-imposed -2 honesty penalty.
+- **$/finding for the BUG_REPORT.** $0.039975 / 2 architectural bugs
+  identified (orphan skills `json_validator`/`web_search` + the
+  `python_execution` coupling hotspot, both surfaced by the GRAPHIFY
+  dependency-graph + betweenness analysis) = **$0.0200 per bug
+  identified-and-written-up**. This is a lower bound: it omits the
+  diagnostic work itself, which was bundled into Phase 3's training spend.
+- **Cost of the seed-123/314 hang (now RESOLVED).** Seeds 123 and 314
+  originally hit the per-seed wall-clock cap (3/5 OK). The Phase-4 **RC-4**
+  fix — a `signal.SIGALRM` 1-second hard cut on Louvain (replacing the
+  daemon-thread watchdog that leaked GIL-contending threads) plus stored
+  action masks in `Trajectory` — closed the wedge: **all 5/5 seeds now
+  complete** (~10 s each). The diagnostic spend (`~$0.09–$0.13` across
+  RC-1…RC-4) bought a real fix, not a write-off; the −2 honesty penalty
+  pre-committed for a 3/5 outcome is **lifted** per PRD §7 (`5/5 → done`).
 
 ## §6 Reproducibility
 

@@ -1,8 +1,7 @@
 """Newman-Girvan modularity (Q) for the skills-graph MDP.
 
-Wires alpha*dModularity in the canonical reward (Phase 2). Phase 4 RC-1/RC-2:
-some mid-rollout topologies wedge Louvain for >>1s on seeds 123/314; we wrap
-Louvain in a ``WATCHDOG_SECONDS`` cap, fall back to greedy CNM, then to Q=0.
+RC-4: uses SIGALRM (POSIX; no-op on Windows) for a 1-second hard cut that
+raises in the *calling* thread — no daemon threads, no GIL accumulation.
 ``safe_louvain`` memoizes by structural graph key so reward.compute_reward
 costs 1 Louvain per snapshot (2 per env.step) instead of 6 (3 metrics x 2).
 """
@@ -10,14 +9,17 @@ costs 1 Louvain per snapshot (2 per env.step) instead of 6 (3 metrics x 2).
 from __future__ import annotations
 
 import logging
+import signal as _signal
+import threading
 
 import networkx as nx
 import networkx.algorithms.community as nx_comm
 
 _LOUVAIN_SEED = 42
-WATCHDOG_SECONDS = 0.05  # Aggressive cap; OK seeds run Louvain in microseconds.
+WATCHDOG_SECONDS = 1.0  # SIGALRM resolution is 1 s (POSIX constraint)
 _MIN_NODES_FOR_MODULARITY = 2  # Q undefined for V<2 (RC-2 topology guard)
 _PARTITION_CACHE_MAX = 64
+_HAS_SIGALRM = hasattr(_signal, "SIGALRM")
 
 _log = logging.getLogger(__name__)
 
@@ -30,39 +32,45 @@ def _greedy_partition(undirected: nx.Graph) -> list[set]:
     return list(nx_comm.greedy_modularity_communities(undirected))
 
 
+class _AlarmTimeoutError(Exception):
+    pass
+
+
 def _run_with_budget(fn, undirected: nx.Graph) -> list[set] | None:
-    """Run ``fn(undirected)`` under ``WATCHDOG_SECONDS``. Daemon thread; on
-    timeout return None and let the worker finish in background (can't kill
-    a Python thread cooperatively). ThreadPoolExecutor was rejected because
-    __exit__ blocks on pending workers, defeating the wall-clock guarantee.
+    """1-second SIGALRM hard cut; no daemon threads (RC-4).
+
+    SIGALRM is only available on the main thread; off-main-thread callers
+    (and Windows) fall back to a bare try/except with no wall-clock bound.
     """
-    import threading  # noqa: PLC0415 — local to keep import budget low
-
-    result: list[list[set] | None] = [None]
-    done = threading.Event()
-
-    def runner() -> None:
+    on_main = threading.current_thread() is threading.main_thread()
+    if not _HAS_SIGALRM or not on_main:
         try:
-            result[0] = fn(undirected)
+            return fn(undirected)
         except Exception:
-            result[0] = None
-        finally:
-            done.set()
+            return None
 
-    threading.Thread(target=runner, daemon=True, name="modularity-watchdog").start()
-    if done.wait(timeout=WATCHDOG_SECONDS):
-        return result[0]
-    return None
+    def _h(s, f) -> None:
+        raise _AlarmTimeoutError()
+
+    old = _signal.signal(_signal.SIGALRM, _h)
+    _signal.alarm(1)
+    try:
+        r = fn(undirected)
+        _signal.alarm(0)
+        return r
+    except (_AlarmTimeoutError, Exception):
+        return None
+    finally:
+        _signal.alarm(0)
+        _signal.signal(_signal.SIGALRM, old)
 
 
 _partition_cache: dict[tuple[frozenset, frozenset], list[set] | None] = {}
 
 
 def _graph_key(undirected: nx.Graph) -> tuple[frozenset, frozenset]:
-    """Cache key by (nodes-frozenset, edges-frozenset). Both required: graphs
-    with the same edges but different isolated-node sets must NOT collide
-    (a cached partition includes node labels and is only valid for the exact
-    graph it was computed on)."""
+    """Cache key: (nodes-frozenset, edges-frozenset). Node-set required to avoid
+    collisions between graphs with the same edges but different isolated nodes."""
     return (frozenset(undirected.nodes()), frozenset(undirected.edges()))
 
 
@@ -97,23 +105,11 @@ def clear_partition_cache() -> None:
 def compute_modularity(graph: nx.DiGraph, *, _partition: list[set] | None = None) -> float:
     """Return the Newman-Girvan modularity ``Q`` of ``graph``.
 
-    The skills-graph is a ``nx.DiGraph``; modularity is defined on
-    undirected graphs, so we project via ``to_undirected()`` before
-    running Louvain. Empty / single-node graphs return ``0.0`` because
-    Q is undefined when there are no edges to partition.
-
-    RC-1 watchdog: Louvain is bounded at ``WATCHDOG_SECONDS``. On timeout
-    we try ``greedy_modularity_communities`` (faster, deterministic,
-    Clauset-Newman-Moore). If *that* also exceeds budget we surrender
-    and return ``0.0`` (trivial partition) so the env.step caller never
-    blocks. Each fallback hop is logged at WARN.
-
-    Args:
-        graph: Directed skills-graph snapshot (e.g. ``env._graph``).
-
-    Returns:
-        Modularity score as a ``float``. Higher = stronger community
-        structure. ``0.0`` for the trivial / empty / wedged case.
+    Projects the ``DiGraph`` to undirected (Q is defined there); empty /
+    single-node graphs return ``0.0``. Louvain runs under a 1 s SIGALRM cut
+    (RC-4); on failure it falls back to greedy CNM, then to ``0.0`` so the
+    env.step caller never blocks. Returns Q as a float (higher = stronger
+    community structure; ``0.0`` for the trivial / empty / wedged case).
     """
     # RC-2: topology early-return — Q undefined on V<2 or E=0.
     if graph.number_of_nodes() < _MIN_NODES_FOR_MODULARITY or graph.number_of_edges() == 0:
