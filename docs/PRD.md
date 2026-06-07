@@ -544,10 +544,12 @@ Inherited from `CLAUDE.md` Hard Constraints, plus A4-specific additions.
      module" — never to "PythonClaw" unqualified.
   2. `docs/ANALYSIS.md` adds a top banner naming the shim as the
      analysed artefact and pointing at this escalation rule.
-  3. The self-grade target (§7) drops from 88–92 to **82–86** to
-     price in the reduced strength of the claim the submission can
-     honestly make about "PythonClaw's architecture" when the
-     artefact analysed is the shim.
+  3. The self-grade target (§7, now anchored at **82 within the
+     78–87 honesty-locked band** after the Phase-4 3/5 seed penalty)
+     drops a further **−4** in the shim-escalation branch (anchor
+     78, band 74–83) to price in the reduced strength of the claim
+     the submission can honestly make about "PythonClaw's
+     architecture" when the artefact analysed is the shim.
 
   This rule is the contract the submission writes with itself
   **before** the deadline, not retroactive after.
@@ -624,10 +626,18 @@ five hidden limitations cost credibility, and the lecturer's feedback
 on A1 made the cost explicit. A4 inherits that lesson and prices it in
 up front:
 
-- **Self-grade target**: 88–92 out of 100, depending on how the
-  L1 (PythonClaw URL), L2 (Obsidian non-determinism), L3 (SB3
-  black box), and L4 (structural-vs-behavioural-bug) limitations
-  resolve at submission time.
+- **Self-grade target**: **78–87 out of 100, anchored at 82**.
+  Baseline 84 minus 2 (HONESTY policy: 3/5 of the 5 sealed seeds
+  completed at the smoke scale; seeds 123/314 hit residual daemon-thread
+  contention documented in `docs/_pending/BUG_REPORT.md` Bug 2). The
+  −2 penalty is automatic per the pre-committed honesty thresholds
+  (5/5→done | 4/5→partial | 3/5→−2 | <3→halt) landed in Phase 4
+  architect-lock. Self-grade caps at 87 even on perfect Phase-4
+  execution because the upstream gate is unmet. The band's lower edge
+  (78) absorbs additional drag from how the L1 (PythonClaw URL), L2
+  (Obsidian non-determinism), L3 (SB3 black box), and L4
+  (structural-vs-behavioural-bug) limitations resolve at submission
+  time.
 - **Why not higher**: every one of L1–L7 is a real reduction in the
   strength of the claim the submission can honestly make, and the
   rubric rewards honest framing over inflated certainty (A1
