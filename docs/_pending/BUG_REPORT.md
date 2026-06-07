@@ -113,23 +113,118 @@
 
 ---
 
-## Bug 2: <title>
+## Bug 2: Louvain community detection wedges on mid-rollout graph topology → env.step blocks indefinitely
 
-> **Placeholder — TODO_ARCHITECT_VERIFY (Wave 3).** Wave-3 will investigate the
-> second reproducible bug and fill this stub. Candidate sources under the
-> Phase-4 honesty lock: the Louvain modularity-wedge regression caught by
-> ``tests/architecture/test_modularity_wedge_regression.py`` (commit `44b313f`),
-> or a reward-component delta isolated from the new ``results/traces/seed_<n>/
-> rollout.jsonl`` ADR-007 traces. Selection criterion: pick the candidate whose
-> reproducer is fully self-contained in source (no live PPO rollout required)
-> so the entry, like Bug 1, can be replayed deterministically without a
-> multi-hour training run.
+- **Severity**: HIGH — the entire training loop wedges. The original symptom was
+  a 7+ hour spin at ~99% CPU on a single seed before manual kill. Surfaced
+  reproducibly during Phase-3 5-seed isolated-subprocess retrains and pinned
+  by RC-0 cProfile under a 90 s SIGALRM watchdog.
 
-- **Symptom**: <observed behavior>
-- **Step ID**: <rollout step / episode index from ADR-007 trace>
-- **Reward Δ**: <component-level delta>
-- **Root cause**: <module + commit hash + minimal explanation>
-- **Fix**: <patch summary, link to PR / commit, regression test path>
+- **Symptom (reproducer)**: pre-RC-1 (any commit before `44b313f`),
+  ``env.step`` blocks indefinitely on seed 123 mid-rollout because
+  ``compute_modularity`` calls ``networkx.community.louvain_communities`` on a
+  pathologically-shaped mid-rollout graph snapshot. Minimal repro at the
+  PPO-trainer boundary:
+  ```bash
+  # Pre-RC-1 (any commit before 44b313f):
+  uv run python -c "
+  import torch
+  from pathlib import Path
+  from src.env.skills_graph_env import SkillsGraphEnv
+  from src.model.policy_net import PolicyNet
+  from src.services.ppo_trainer import PPOTrainer
+  torch.manual_seed(123)
+  env = SkillsGraphEnv(Path('src/pythonclaw_shim/sample_skills'), seed=123)
+  trainer = PPOTrainer(env, PolicyNet(), clip_eps=0.2, gae_lambda=0.95)
+  trainer.collect_rollout()  # wedges indefinitely on seed=123 mid-rollout
+  "
+  ```
+
+- **Stack trace at the wedge** (RC-0 cProfile spike captured under a 90 s
+  SIGALRM watchdog):
+  ```
+  PPOTrainer.collect_rollout → env.step → _safe_reward → compute_reward
+    → compute_modularity → nx_comm.louvain_communities → _one_level → _neighbor_weights
+  ```
+
+- **Affected seeds (pre-fix)**: 123, 314. Reproducible in their own isolated
+  subprocesses, which rules out inter-seed state leak and pins the bug to
+  topology-conditioned Louvain pathology rather than rollout-buffer
+  cross-contamination.
+
+- **Wall-clock impact (pre-fix)**: 7+ hours at ~99% CPU on the original
+  Phase-3 retrain before being killed manually. Under the RC-0 90 s
+  SIGALRM watchdog the spike pinned at ``_neighbor_weights`` every time.
+
+- **Reward Δ**: not applicable — the wedge is inside ``compute_modularity``
+  which is invoked from ``_safe_reward → compute_reward``. The step never
+  returns so no ``(s, a, r, s')`` transition is appended to the rollout
+  buffer, and no ΔModularity / ΔCohesion / Coupling_Penalty / P_skills
+  row is emitted for the wedged step.
+
+- **Root cause hypothesis**: ``networkx.community.louvain_communities`` has a
+  worst-case pathological execution path on small but specifically-shaped
+  graphs. The cProfile stack pointed at the inner ``_one_level →
+  _neighbor_weights`` loop, which iterates a ``defaultdict(float)`` over each
+  node's neighbours; degenerate neighbour-count patterns appear to cause
+  prolonged iteration without crashing or returning.
+
+  **Compounding factor.** ``env.step`` calls ``compute_reward`` once, but
+  ``compute_reward`` calls ``compute_modularity`` *twice* (before + after the
+  refactor op for ΔModularity), ``compute_cohesion`` *twice*, and
+  ``compute_coupling_penalty`` *twice* — so a naive implementation pays
+  **six Louvain calls per env.step**. On a wedge-prone topology each one
+  blows the per-call budget independently, multiplying the hang.
+
+- **Fix**: multi-part, landed across commits `44b313f` and `d489306` (RC-1):
+
+  1. ``safe_louvain`` wraps Louvain in a ``threading.Thread`` plus
+     ``threading.Event.wait(timeout=WATCHDOG_SECONDS)``. On timeout, fall
+     back to ``greedy_modularity_communities`` under the same budget; if
+     *that* also exceeds, return ``None`` and the metric short-circuits
+     to ``0.0``.
+  2. ``WATCHDOG_SECONDS = 0.05`` — aggressive on purpose: OK seeds run
+     Louvain in microseconds on these graph sizes, so the budget never
+     trips for them; wedge-prone topologies short-circuit fast instead
+     of blowing the rollout budget.
+  3. **Per-step partition share**: ``compute_reward`` computes the
+     partition *once per snapshot* (before + after = **2** ``safe_louvain``
+     calls per ``env.step`` instead of 6), threading the cached partition
+     into modularity, cohesion, and coupling-penalty metrics.
+  4. **Cache** ``safe_louvain`` results by ``(frozenset(nodes),
+     frozenset(edges))``. NOOPs and failed refactor ops (graph unchanged
+     step-to-step) pay zero Louvain work.
+  5. **Topology early-return guard**: ``V < 2`` or ``E == 0`` short-circuits
+     before Louvain is even called.
+
+- **Regression tests**:
+  - ``tests/architecture/test_modularity_wedge_regression.py`` — asserts
+    ``wall_time < 1.5 s`` on the known-wedge topology that previously hung
+    for 7+ hours.
+  - ``tests/unit/services/metrics/test_modularity_watchdog.py`` — 4 cases:
+    watchdog fires + falls back to greedy, double-timeout returns ``0.0``,
+    happy path unaffected (no spurious timeout), and cache-hit path skips
+    the watchdog entirely.
+  - ``tests/unit/services/metrics/conftest.py`` — autouse ``safe_louvain``
+    cache clear between tests so partition memoisation cannot leak across
+    cases and mask a regression.
+
+- **Residual (honestly disclosed)**: seeds 123 and 314 **still** TIMEOUT at the
+  240 s/seed budget under full ``collect_rollout`` + ``update`` after RC-1.
+  The wedge moved from Louvain blocking on the main thread to *daemon-thread
+  contention*: Python cannot kill threads cooperatively, so each wedged
+  Louvain leaks a background thread that keeps competing for the GIL with
+  the main rollout thread. A fundamental fix would require switching from
+  ``threading`` to ``multiprocessing`` (so a hung worker can be ``terminate()``-d).
+  Tracked as Phase-4 RC-INCOMPLETE in TRACE F10 / TODO T3.7 / EXPERIMENTS
+  P3-E1. Acceptable under the honesty lock (3/5 OK seeds → −2 self-grade
+  penalty already applied).
+
+- **Empirical numbers**: seed 123 went from a 7+ hour hang (pre-RC-1) to
+  ``51.3 s`` for an isolated single-seed ``collect_rollout`` smoke (post-RC-1),
+  to ``240 s/seed`` TIMEOUT under the full PPO rollout + update loop
+  (residual daemon-thread contention described above). Seeds 42, 7, 271
+  complete cleanly post-RC-1 with no watchdog firings observed.
 
 ---
 
