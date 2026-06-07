@@ -55,3 +55,22 @@ paths:
   vault_dir: "results/vault/"
   figures_dir: "results/figures/"
   ablation_dir: "results/ablation/"
+
+ablation:
+  # COMPACT grid: 3 values per knob, 3 seeds/cell, 256 steps/seed.
+  # Smoke runs in ~30 min wall-clock on M-series (3 cells/min after RC-1).
+  grids:
+    compact:
+      alpha:    [0.5, 1.0, 2.0]
+      beta:     [0.5, 1.0, 2.0]
+      gamma:    [0.0, 0.5, 1.0]
+      p_skills: [-10.0, -5.0, -1.0]
+    smoke:
+      alpha:    [1.0]
+      beta:     [1.0]
+      gamma:    [0.5]
+      p_skills: [-5.0]
+  scout_seeds: [42, 7, 271]     # 3 OK seeds (post-RC-1; 123/314 wedged in 2/5 TIMEOUT)
+  total_steps_per_cell_seed: 256
+  per_seed_timeout_s: 240
+  cell_timeout_s: 900           # 3 seeds × 240s + slack
