@@ -152,8 +152,12 @@ def test_step_uses_reward_coeff_overrides(tiny_source_tree: Path, monkeypatch) -
 
     monkeypatch.setattr("src.env.skills_graph_env.compute_reward", _fake)
     env = SkillsGraphEnv(
-        tiny_source_tree, seed=42,
-        reward_alpha=2.5, reward_beta=3.5, reward_gamma=0.25, reward_p_skills=-7.0,
+        tiny_source_tree,
+        seed=42,
+        reward_alpha=2.5,
+        reward_beta=3.5,
+        reward_gamma=0.25,
+        reward_p_skills=-7.0,
     )
     env.reset()
     assert env.step(_noop())[1] == 42.0
