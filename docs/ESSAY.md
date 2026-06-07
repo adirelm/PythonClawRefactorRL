@@ -20,13 +20,58 @@ expensive, fuzzy, and irreplaceable at exactly those edges. The empirical
 question this essay engages is *where the seam belongs*, and the Phase-4
 ablation matrix is the first datapoint our project contributes toward an answer.
 
-## §1 Introduction (~400 words) — brief prompt #1: complementarity
+## §1 Introduction (~500 words) — brief prompt #1: complementarity
 
-- Why GRAPHIFY's deterministic priors matter for refactor search.
-- Why LLM-agents handle the ambiguous decisions.
-- The A_max=45057 boundary as a concrete instance of the seam.
-- Frame the rest of the essay against the brief's three §2.4 prompts.
-- **Cites:** `allamanis2018graphs`, `chen2021codex`, `schulman2017ppo`.
+Refactoring a non-trivial Python codebase is a search problem whose state space
+is too large for exhaustive enumeration and whose objective function is too
+underspecified for any single tool to optimise alone. Static-analysis pipelines
+can enumerate every call edge and every import cycle, but they cannot decide
+whether a tightly coupled pair of modules expresses an accidental dependency or
+a domain-coherent unit that should stay welded together. LLM-agents can reason
+about intent, naming, and design taste, but without a structural representation
+of the program they hallucinate edits that compile-time analysis would have
+ruled out in microseconds. The bridge between these two regimes is a graph
+representation of the program itself — what [Allamanis18] formalised as
+"learning to represent programs with graphs" — and the working hypothesis of
+this essay is that the future of AI-assisted refactoring lies not in choosing
+between deterministic graph tools and LLM-agents but in pinning down the seam
+where one hands off to the other.
+
+The deterministic side of that seam is what we call the GRAPHIFY layer. In this
+assignment the GRAPHIFY role is played by `src/graphify/local_impl.py`, a local
+Python-source parser that emits a NetworkX `DiGraph` of skill nodes and their
+call / import / co-change edges. From that graph the environment derives the
+metrics that drive every reward signal: modularity (Newman-style community
+score), per-cluster cohesion, and inter-cluster coupling. These quantities are
+cheap, reproducible, and exact — two runs over the same source tree produce
+byte-identical graphs and identical reward components. They constrain the
+refactor search space *before* any policy is queried: action masking in
+`src/env/action_mask.py` consumes the same graph to forbid moves that would
+violate structural invariants (e.g. merging two nodes with no shared
+neighbours). Deterministic priors, in short, are how we make the problem
+tractable.
+
+The semantic side of the seam is what LLM-agents contribute. [Chen21] showed
+that large code-pretrained models can synthesise functions from intent;
+[Jimenez24] showed that the same models, when wrapped as agents, can resolve
+real GitHub issues end-to-end. Neither result generalises to "the LLM should
+pick every refactor action," but both demonstrate that LLMs are competitive on
+exactly the decisions modularity cannot adjudicate: naming, comment-level
+intent, whether a proposed split preserves a public contract.
+
+The boundary where the two regimes meet, in this project, is the action space
+itself. `src/env/actions.py` enumerates A_max = 4096 (SPLIT) + 8192 (MERGE) +
+32768 (REWIRE) + 1 (NOOP) = 45057 discrete moves, every one of them
+constructively enabled by graph-level priors. The PPO trainer in
+`src/services/ppo_trainer.py` — following the clipped-objective algorithm of
+[Schulman17] — learns which of those 45057 moves to take given the masked
+distribution. Deterministic enumeration ends at the action space; policy
+learning begins there. The rest of this essay traces the consequences of that
+hand-off: §2 surveys the static-analysis landscape that produces the priors,
+§3 details our methodology, §4 reports the empirical lessons (including where
+the complementarity hypothesis fails), and §5 concludes.
+
+- **Cites:** `allamanis2018graphs`, `chen2021codex`, `jimenez2024swebench`, `schulman2017ppo`.
 
 ## §2 Static analysis landscape (~700 words) — brief prompt #2: AI automating SA
 
