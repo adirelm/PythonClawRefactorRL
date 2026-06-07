@@ -259,8 +259,11 @@ expected return up to PPO stochasticity. That is the *audit* property
 - The Louvain wedge story: `P4-RC-0` cProfile spike on seed=123 →
   `nx_comm.louvain_communities → _one_level → _neighbor_weights` on
   degenerate topologies → RC-1 watchdog/fallback fix.
-- Ablation matrix outcomes (cite our own results once landed under
-  `results/ablation/`).
+- Empirical anchor — 81-cell ablation grid (all n_ok=3/3): baseline
+  (α=1.0, β=1.0, γ=0.5, P=−5.0) → −0.340; best (α=0.5, β=0.5, γ=1.0,
+  P-tie) → +0.122 (Δ=+0.462); worst (α=2.0, β=2.0, γ=0.0, P=−10.0) →
+  −1.041. Marginal swings: α=0.599, γ=0.287, β=0.162, P_skills≈0.
+  Canonical α=1.0 is not the optimum.
 - Where the GRAPHIFY × LLM complementarity hypothesis FAILS: degenerate
   graphs where modularity itself is ill-defined; small modules where Louvain's
   resolution limit dominates; refactors whose value is purely stylistic.
