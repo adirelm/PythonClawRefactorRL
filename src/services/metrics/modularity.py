@@ -144,7 +144,6 @@ def delta_modularity(before: nx.DiGraph, after: nx.DiGraph) -> float:
     Args:
         before: Graph snapshot before the action.
         after: Graph snapshot after the action.
-
     Returns:
         Float difference; positive means modularity improved.
     """
