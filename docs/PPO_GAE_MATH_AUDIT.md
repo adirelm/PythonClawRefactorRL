@@ -27,7 +27,7 @@ if float(cfg.clip_eps) != _CLIP or float(cfg.gae_lambda) != _LAM:
 ```
 where `_CLIP, _LAM, _GAMMA = 0.2, 0.95, 0.99` (line 21).
 
-**KL + clip-fraction logging (ppo_trainer.py:149–152):**
+**KL + clip-fraction logging (ppo_trainer.py:150–152):**
 ```python
 diff = self._eval(trajectory, batch)[0] - trajectory.log_probs[batch]
 cf = float(((torch.exp(diff) - 1.0).abs() > self.clip_eps).float().mean().item())
@@ -56,7 +56,7 @@ Acceptable for assignment scope; flag in `BUG_REPORT.md` follow-ups.
 **Eq. 16 (GAE recursion):** Â_t = δ_t + γλ Â_{t+1}
 **Terminal mask:** Â_t = δ_t + γλ(1−done_t) Â_{t+1}; boundary Â_T = 0.
 
-**Code (gae_buffer.py:74–83, `compute_gae_advantages`):**
+**Code (gae_buffer.py:74–82, `compute_gae_advantages`):**
 ```python
 advantages = torch.zeros_like(rewards)
 next_value = float(last_value)
