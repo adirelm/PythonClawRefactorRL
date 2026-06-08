@@ -217,6 +217,42 @@ src/
 └── utils/           # config loader, seeding
 ```
 
+## Configuration
+
+All tunable parameters live in **`config/config.yaml`** (single source of truth)
+and are read via `src/utils/config_loader.py` — **no algorithm value is hardcoded
+in source** (enforced by `tests/architecture/test_config_refs.py`). Key blocks:
+
+| Block | Controls |
+|---|---|
+| `ppo` | `clip_eps` (0.2, sealed), `gae_lambda` (0.95, sealed), `gamma`, `lr`, `n_steps`, `n_epochs`, `batch_size`, `vf_coef` |
+| `reward` | `alpha`, `beta`, `gamma`, `p_skills` (canonical reward coefficients) |
+| `ablation` | `grids` (compact/smoke), `scout_seeds`, `total_steps_per_cell_seed`, `per_seed_timeout_s` |
+| `seeds` | the 5 sealed seeds `[42, 7, 123, 314, 271]` |
+| `centrality`, `state`, `action`, `training`, `environment`, `paths` | metric, encoder, env, and I/O settings |
+
+Secrets (if ever needed) go in a git-ignored `.env`; `.env-example` documents the
+expected keys. The config file carries a `version` field validated at load.
+
+## Contributing
+
+This is a course assignment, but it follows professional standards (see
+[`CLAUDE.md`](CLAUDE.md) and the V3 submission guidelines). Before any change:
+
+```bash
+uv sync --dev
+uv run pytest tests/ --cov=src     # must pass, coverage ≥85%
+uv run ruff check src/ tests/ scripts/   # zero violations
+uv run ruff format src/ tests/ scripts/  # auto-format
+uv run python scripts/check_file_sizes.py # every .py ≤150 LOC
+```
+
+Standards: **TDD** (test before/with code), **OOP** via the `RefactorSDK` single
+entry point, **DRY** (extract at the second copy), every `.py` **≤150 lines**,
+docstrings on every public function/class/module, and **`uv` only** (no `pip` /
+`python -m` / `venv`). Commit subjects follow `phase<N>(<scope>): <description>`;
+work on a feature branch and open a PR for review.
+
 ## References
 
 - Schulman et al. 2017 — *Proximal Policy Optimization Algorithms* (arXiv:1707.06347)
@@ -224,6 +260,8 @@ src/
 - Newman & Girvan 2004 — *Finding and evaluating community structure in networks*
 - Huang & Ontañón 2022 — *A Closer Look at Invalid Action Masking in Policy Gradient Algorithms*
 
-## License
+## License & Credits
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE). Built on PyTorch, NetworkX, tiktoken, NumPy, SciPy,
+Matplotlib, and pyvis; managed with `uv`. Course: Bar-Ilan *Vibe Coding & RL*
+workshop (Dr. Yoram Segal).
