@@ -26,7 +26,7 @@ are the graded deliverables; deeper detail lives in the linked docs.
 uv sync --dev
 
 # Quality gates
-uv run pytest tests/ --cov=src --cov-report=term-missing   # 343 pass, 94% cov
+uv run pytest tests/ --cov=src --cov-report=term-missing   # 346 pass, 1 skip, 94% cov
 uv run ruff check src/ tests/ scripts/                     # 0 violations
 uv run python scripts/check_file_sizes.py                  # all .py ≤150 LOC
 

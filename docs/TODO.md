@@ -92,7 +92,7 @@ rather than masking them):
 | 1 | §2.1 GRAPHIFY + Obsidian (graph builder, adapter, screenshots) | ✅ (brief deliverables done; extra renders deferred) | `src/graphify/`, `results/graphify_output.gpickle`, `results/vault/`, `results/figures/obsidian_before.png` + `obsidian_after.png` (the brief-required before/after shots). Dedicated `results/graphs/` NetworkX/pyvis PNGs + `results/obsidian/hero_{1,2,3}.png` were self-imposed extras, **not brief-required**, and remain deferred. commit `0165fa2` |
 | 2 | §2.2 Environment (state/action design, refactor env, reward = α·ΔModularity + β·ΔCohesion − γ·Coupling_Penalty + P_skills, masking) | ✅ | `src/env/skills_graph_env.py`, `src/env/state.py`, `src/env/actions.py`, `src/env/action_mask.py`, `src/env/reward.py`, `src/services/metrics/{modularity,cohesion,coupling}.py`, `src/services/centrality.py`, `docs/STATE_DESIGN.md`, `docs/ACTION_DESIGN.md`, commit `ec1288a` (impl) + `1c317ef` (metrics gap close) |
 | 3 | §2.3 PPO + GAE (policy net, GAE advantage, clipped surrogate, SB3 spike + fallback) | ✅ | `src/services/ppo_trainer.py`, `src/services/gae_buffer.py`, `src/model/policy_net.py`, `src/model/encoder.py`, `scripts/train_ppo.py`, `results/figures/obsidian_after.png`, `results/figures/betweenness_ci.png`, `results/data/betweenness_table.csv`, `docs/adr/ADR-008-sb3-variable-v-buffer.md`, commit `71f0213` |
-| 4 | §2.4 Cost + ablations + essay (tiktoken cost panel, α/β/γ/P_skills ablation matrix ≥5 seeds, ΔReward summary, 2500–3000 word essay) | ✅ | `docs/COST_ANALYSIS.md` (§0 Skills-token + PPO-runtime, D8), `results/ablations/` (81 cells × 5 seeds, 405/405 ok), `docs/ANALYSIS.md` (D7 ΔReward), `docs/ESSAY.md` (2,990 words), `notebooks/analysis.ipynb`, commit `phase4(rc4)` |
+| 4 | §2.4 Cost + ablations + essay (tiktoken cost panel, α/β/γ/P_skills ablation matrix ≥5 seeds, ΔReward summary, 2500–3000 word essay) | ✅ | `docs/COST_ANALYSIS.md` (§0 Skills-token + PPO-runtime, D8), `results/ablations/` (81 cells × 5 seeds, 405/405 ok), `docs/ANALYSIS.md` (D7 ΔReward), `docs/ESSAY.md` (2,994 words), `notebooks/analysis.ipynb`, commit `phase4(rc4)` |
 
 Phase gates (all must be green before a phase is marked ✅):
 ruff zero violations · every `.py` ≤150 LOC · coverage ≥85% · uv-only ·
@@ -168,6 +168,12 @@ which landed in this workflow run. The fine-grained T02-NN rows below
 remain the per-acceptance-test surface; T2.x rows are the workflow-level
 bundle that gates Phase 2 closure.
 
+> ⚠️ **As-built note.** Module/test paths in the T02-NN rows reflect the
+> *original plan* and were not all rewired to the final layout (e.g. the env
+> shipped as `src/env/skills_graph_env.py`, not `src/env/refactor_env.py`;
+> there is no `src/env/tokens.py` / `src/env/episode_logger.py` / `src/utils/seeding.py`).
+> The **authoritative as-built paths + commit SHAs are the T2.x table above.**
+
 | id | content | status | evidence pointer |
 |----|---------|--------|------------------|
 | T2.1 | State encoder (A, X, edge_attrs) per `docs/STATE_DESIGN.md` + ADR-002 | ✅ | `src/env/state.py`, commit `ec1288a` |
@@ -211,6 +217,13 @@ The Phase 3 build workflow tracks these nine top-level deliverables, all
 of which landed in this workflow run. The fine-grained T03-NN rows below
 remain the per-acceptance-test surface; T3.x rows are the workflow-level
 bundle that gates Phase 3 closure.
+
+> ⚠️ **As-built note.** Module/test paths in the T03-NN rows reflect the
+> *original plan*. The PPO/GAE code shipped under `src/services/` +
+> `src/model/` (not `src/training/` / `src/policy/`), and the CLI shipped as
+> `python -m src.cli` (`src/cli/__main__.py`) — there is **no `main.py` or
+> `src/cli/menu.py`**. The **authoritative as-built paths + commit SHAs are
+> the T3.x table above.**
 
 | id | content | status | evidence pointer |
 |----|---------|--------|------------------|
@@ -269,6 +282,14 @@ Goal: token-cost panel via tiktoken, full α/β/γ/P_skills ablation matrix
 (≥5 seeds/cell), and the 2500–3000 word essay with 8–12 citations + 2
 diagrams.
 
+> ⚠️ **As-built note.** The T04-NN rows reflect the *original plan*. The
+> ablation runner shipped as `scripts/run_ablation.py` (singular) writing
+> `results/ablations/cell_*/done.json` → aggregated to
+> `results/data/ablation_stats.json`; charts are `results/figures/ablation_heatmap.png`
+> + `ablation_marginals.png` (not `results/ablations/{raw,summary}.csv` /
+> `heatmap_ab.png`). The essay is `docs/ESSAY.md`. Phase-4 status is tracked
+> as ✅ done in the §3 phase table and `docs/TRACE.md`.
+
 | id | content | activeForm | phase | LOC-Δ | req | acceptance |
 |----|---------|------------|-------|-------|-----|------------|
 | T04-01 | Author `docs/COST_ANALYSIS.md` (D8) — tiktoken cl100k headline + chars/bytes appendix, prompts × tokens × $ table, AI-tooling cost section, **cost envelope** (architect-decided spend cap with running total vs envelope) | Authoring COST_ANALYSIS.md (D8) | 4 | +180 docs | D8,§2.4-cost | Headline number is tiktoken; appendix has chars + bytes; ≥1 cost table; cost envelope section names cap + actual spend |
@@ -303,7 +324,7 @@ below is satisfied.
 | Reward formula matches canonical brief §2.2 (`α·ΔModularity + β·ΔCohesion − γ·Coupling_Penalty + P_skills`) | `tests/architecture/test_reward_formula.py` (T02-12) AST check | 2 |
 | Config refs use `config/config.yaml#<block>` (no `state.yaml`/`action.yaml`/`reward.yaml`) | `tests/architecture/test_config_refs.py` (T02-14) | 2 |
 | Convergence asserted via dual criterion | `test_dual_convergence_requires_both_conditions` (T03-06) | 3 |
-| Learning curve PNG (D6) exists + ΔReward (D7) numeric | `tests/test_learning_curve.py` (T03-12) | 3 |
+| Learning curve PNG (D6) exists + ΔReward (D7) numeric | `results/learning_curves/reward_vs_episode.png` present (rendered by `scripts/render_learning_curve.py`); ΔReward numeric in `docs/ANALYSIS.md` | 3 |
 | Ablation cells have ≥5 seeds and CI | `summary.csv` schema check in T04-03 | 4 |
 | Cost envelope (D8) recorded in `docs/COST_ANALYSIS.md` | T04-01 acceptance check | 4 |
 | No PII matches against deny-list | `grep -E "REDACTED-NAME\|REDACTED-HANDLE\|REDACTED\|REDACTED-ID\|GoogleDrive-REDACTED-HANDLE"` returns zero matches in tree (the literal pattern lives only in this TODO row and in CLAUDE.md) | 0 |
