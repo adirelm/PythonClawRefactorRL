@@ -183,7 +183,8 @@ Save plots as PNG in `results/figures/` and ablation CSVs in
 ## Version Control
 
 - New repository for A4 (NOT the same as A1/A2/A3). Branch: `main`.
-- Initial version: `1.2.0` on the assignment-4 deliverable tag.
+- Initial version `1.2.0` (`v1.2.0` tag); current `1.3.0` (`v1.3.0` — adds the
+  brief-§3 per-metric improvement curves + the P4-E3 extended convergence experiment).
 - Commit-message convention: `<Phase N|Phase 0 bootstrap|chore: bootstrap>:
   <imperative summary>`.
 - Co-author trailer required on every Claude-generated commit:

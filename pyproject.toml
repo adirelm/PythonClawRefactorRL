@@ -1,6 +1,6 @@
 [project]
 name = "pythonclawrl"
-version = "1.2.0"
+version = "1.3.0"
 description = "Bar-Ilan Vibe-Coding & RL Workshop — Assignment 4 (PPO+GAE on PythonClaw Skills graph)"
 readme = "README.md"
 license = {text = "MIT"}
