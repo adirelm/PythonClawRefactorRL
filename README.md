@@ -165,24 +165,23 @@ real 1,190-node graph, reported as mean ± 95% CI (`results/data/betweenness_tab
 
 ---
 
-## 6. Bug report — bugs in the **real** PythonClaw
+## 6. Bug report — real bugs in PythonClaw
 
-Found by GRAPHIFY reverse-engineering (pinned SHA `7787bb43`) + code review of the
-flagged hubs. Full write-up: [`docs/BUG_REPORT.md`](docs/BUG_REPORT.md).
+Found by GRAPHIFY reverse-engineering (pinned SHA `7787bb43`) + a **30-agent
+hunt** (24 hunters → 50 candidates → 6 adversarial verifiers, all CONFIRMED) +
+a 20-agent verify pass. Full write-up + file:line evidence:
+[`docs/BUG_REPORT.md`](docs/BUG_REPORT.md).
 
-1. **🔴 Command injection (CWE-78) in `core/tools.py::run_command`** — a
-   **PRIMITIVE_TOOL always available to the LLM** runs its model-supplied argument
-   through `subprocess.run(command, shell=True)` with **no allow-list and no
-   sandbox**, while the *same file* sandboxes every file operation. A prompt
-   injection (a malicious page the agent reads) → arbitrary RCE. A **real,
-   exploitable security defect** — not a smell.
-2. **🟠 God Object — `core/agent.py` (1,151 LOC).** The `Agent` class wires **27
-   collaborators** in one `__init__`; the largest, most-coupled module — a genuine
-   architectural anti-pattern (maintainability), surfaced as the top fan-out node.
+| # | Bug | Severity |
+|---|---|---|
+| 1 | **Command injection** — `run_command` runs `subprocess.run(cmd, shell=True)` on LLM input, no sandbox (CWE-78) | 🔴 CRITICAL |
+| 2 | **Unauthenticated, network-exposed web dashboard → remote RCE** — every route + `/ws/chat` has no auth, binds `0.0.0.0`, no `Origin` check (CSWSH); chat → `run_command` | 🔴 CRITICAL |
+| 3 | **Zip Slip** in marketplace skill install — `os.path.join(skill_dir, member)` from a downloaded ZIP with no traversal check → write-anywhere/RCE (CWE-22) | 🔴 CRITICAL |
+| 4 | **Sandbox bypass** — `read_file` reads any path, `send_file` exfiltrates any file (both skip the sandbox `write_file` enforces) | 🟠 HIGH |
 
-(§3 of `BUG_REPORT.md` also lists structural *smells* — coupling to `llm/base.py`,
-oversized modules — **honestly labelled as smells, not bugs**. PythonClaw has no
-import cycles or dead code. An appendix covers our own harness defects.)
+Plus one **smell** (not a bug, honestly labelled): the God Object `core/agent.py`
+(1,151 LOC, 27 collaborators in `__init__`). PythonClaw has no import cycles or
+dead code. An appendix covers our own harness defects.
 
 ---
 
