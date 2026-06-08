@@ -228,15 +228,13 @@ under `results/training/seed_<N>/`, and aggregates a
 `results/training/aggregate.json` over whichever seeds completed
 within their budget. Isolation matters: a wedge on one seed must not
 poison the others, and a subprocess boundary is the cheapest enforcement
-of that property. At the retrain scale recorded under
-`results/training/aggregate.json`, **all 5/5 seeds complete cleanly**
-(42, 7, 123, 314, 271) with mean reward −0.461 ± 0.186 after the RC-4
-fix — a `signal.SIGALRM` 1-second hard cut on Louvain (replacing the
-daemon-thread watchdog that leaked GIL-contending threads) plus stored
-action masks in `Trajectory` (`src/services/metrics/modularity.py`
-`_run_with_budget`). The earlier 3/5 wedge on seeds 123/314 is documented
-as a found-and-fixed failure mode in `docs/BUG_REPORT.md` Appendix A2,
-traced through RC-0 cProfile — not a silently-dropped one. The HONESTY
+of that property. On the **real PythonClaw** graph (1,190 nodes) recorded under
+`results/training/aggregate.json`, **all 5/5 seeds complete cleanly** with mean
+reward −0.027 ± 0.022 after the RC-4 fix — a `signal.SIGALRM` 1-second hard cut on
+Louvain (replacing the daemon-thread watchdog that leaked GIL-contending threads)
+plus stored action masks in `Trajectory`. The earlier 3/5 wedge on seeds 123/314
+is a found-and-fixed failure mode in `docs/BUG_REPORT.md` Appendix A2 — not a
+silently-dropped one. The HONESTY
 thresholds locked in §4 — 5/5 promote, 4/5 partial, 3/5 grade penalty −2,
 <3/5 halt — bound this number to a grade outcome before any retrain
 began, so the 5/5 result is a measured outcome (promote) rather than a
@@ -251,8 +249,8 @@ expected return up to PPO stochasticity. That is the *audit* property
 
 ## §4 Empirical lessons + limitations (~700 words) — brief prompt #3: limitations
 
-- The 5-of-5-seed retrain outcome (mean reward −0.461 ± 0.186, n=5) after the
-  RC-4 fix. Locked HONESTY thresholds:
+- The 5-of-5-seed outcome on the **real PythonClaw graph** (mean reward
+  −0.027 ± 0.022, n=5) after the RC-4 fix. Locked HONESTY thresholds:
   5/5 → promote · 4/5 → partial · 3/5 → Phase-3 −2 grade penalty · <3/5 → halt.
   The 5/5 result maps to **promote** (no penalty).
 - The Louvain wedge story: `P4-RC-0` cProfile spike on seed=123 →
@@ -278,8 +276,8 @@ expected return up to PPO stochasticity. That is the *audit* property
 Three honest limits bound the claims above. **First**, the smoke scale: the
 5-seed protocol completes on **all 5/5 seeds** after RC-4, but at a 256-step
 PPO budget — a deliberately short smoke run, not convergence-scale training.
-The negative mean reward (−0.461 ± 0.186) reflects the short horizon, not a
-broken policy. Per the locked HONESTY policy (5/5 → promote · 4/5 → partial ·
+The near-neutral mean reward on the real graph (−0.027 ± 0.022) reflects the
+short horizon, not a broken policy. Per the locked HONESTY policy (5/5 → promote · 4/5 → partial ·
 3/5 → −2 · <3/5 → halt), this ships as **promote**; the fix trail is in
 `docs/BUG_REPORT.md` Appendix A2. **Second**, the GIL caveat is now resolved:
 RC-4's `signal.SIGALRM` cut replaced the `threading` watchdog that leaked
