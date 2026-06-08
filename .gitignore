@@ -44,6 +44,10 @@ data/processed/
 results/checkpoints/
 results/ablation/
 
+# Extended-run (P4-E3) checkpoints are ~11 MB each; regenerate via the command in
+# docs/EXPERIMENTS.md P4-E3. The lightweight reward/metric records ARE committed.
+results/training_converged/**/checkpoint.pt
+
 # Obsidian vault internals — keep the vault dir tracked but exclude editor state
 results/vault/.obsidian/
 

@@ -215,6 +215,15 @@ as a coarse ordinal signal, not a precise effect size.
   grids (5 values per knob, 1000+ steps) would tighten CIs further but exceeded
   the brief's wall-clock budget. The 256-step horizon keeps point estimates
   directional, not convergence-scale.
+- **Extended-budget check (P4-E3, refuted).** To test whether the smoke horizon
+  is what suppresses improvement, a 4×-budget run (1,024 steps/seed, 5 seeds) was
+  trained on the **real** 1,190-node graph with the **best ablation cell's**
+  coefficients (α=0.5, β=1.0, γ=1.0, P_skills=−1.0). It still breaks even: mean
+  reward **−0.055 ± 0.019**, per-metric Δ modularity −0.013 / cohesion −0.003 /
+  coupling −0.002 (`results/data/metric_curves_converged.csv`). So the breakeven
+  is **not** merely a 256-step artefact — decisive net-positive refactoring needs
+  ≫1k steps and/or a richer reward, not just the best coefficients. This is a
+  measured negative result, recorded rather than buried.
 - **Reward formula is non-stationary** — episodes start with the original sample_skills
   graph and SPLITs / MERGEs change topology mid-rollout. The reported final reward is
   the sum of per-step deltas (matches RC-5 protocol).

@@ -138,6 +138,7 @@ implements its semantics.
 | Deliv-20 | PRD-SKILLS — skills/reward product requirements. | n/a | n/a | `docs/prd/PRD-SKILLS.md` | `58bf82f` | ✅ done |
 | §3 bug-report | ≥2 architectural bugs documented | `docs/BUG_REPORT.md` | n/a | `docs/BUG_REPORT.md` | `2e46ceb` | ✅ done |
 | §3 before/after (**F17** writer + **F10** screenshots + **D9** before-evidence) | Obsidian Vault writer (F17) + pre-refactor hero shot (D9) + after-refactor hero shot (F10). | `src/services/vault_writer.py`, `scripts/capture_obsidian_stub.py`, `scripts/capture_obsidian_after.py` | `tests/architecture/test_graphify_contract.py`, `tests/unit/services/test_vault_writer.py` | `results/vault/`, `results/figures/obsidian_before.png` (**D9** ✅), `results/figures/obsidian_after.png` (✅ F10) | `71f0213` | ✅ done |
+| §3 per-metric improvement (**D9b**) | Brief §3 "graphs of the improvement in modularity, cohesion, coupling": replay the trained policy → per-step metric trace → 3-panel chart + tidy CSV; plus the extended best-config convergence check (P4-E3). | `src/services/_metric_trace.py`, `scripts/render_metric_curves.py` | `tests/unit/services/test_metric_trace.py`, `tests/unit/scripts/test_render_metric_curves.py` | `results/figures/metric_improvement_curves.png` + `..._converged.png`, `results/data/metric_curves.csv` + `..._converged.csv` | `885364d` | ✅ done |
 
 ---
 

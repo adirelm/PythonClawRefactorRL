@@ -163,6 +163,34 @@ budget. CIs use Student-t at dof=4 (n=5). Full breakdown + marginals:
 Computed **exactly twice per seed** (training start + end) across 5 seeds on the
 real 1,190-node graph, reported as mean ± 95% CI (`results/data/betweenness_table.csv`).
 
+### 5.4 Per-metric improvement — modularity / cohesion / coupling (brief §3)
+
+![Per-metric improvement](results/figures/metric_improvement_curves.png)
+
+The brief asks for **separate improvement curves for the three architecture
+metrics**. Replaying the trained policy on the real 1,190-node graph and
+snapshotting modularity / cohesion / coupling at every rollout step
+(`src/services/_metric_trace.py` → `scripts/render_metric_curves.py` →
+`results/data/metric_curves.csv`, mean ± 95% CI over 5 seeds): at the 256-step
+smoke budget all three are **essentially flat** — modularity 0.585 → 0.576,
+cohesion ≈ 0.057, coupling ≈ 0.32 — i.e. the default-config policy holds the
+architecture steady rather than improving it, matching the −0.027 reward.
+
+**Did more training + better coefficients help?** A separate **extended run at
+4× budget (1,024 steps)** using the **ablation-winning** coefficients
+(α=0.5, β=1.0, γ=1.0, P_skills=−1.0 — the net-positive region of §5.2) still
+breaks even: mean reward **−0.055 ± 0.019** (n=5), per-metric Δ modularity
+−0.013 / cohesion −0.003 / coupling −0.002 over the rollout
+(`results/figures/metric_improvement_curves_converged.png`,
+`results/data/metric_curves_converged.csv`). So **neither budget × config
+combination yields decisive improvement at this scale** — direct, multi-seed
+evidence for the convergence-scale limitation (§7). The improvement curves are
+delivered and reported honestly rather than cherry-picked. (Reproduce:
+`uv run python scripts/train_ppo.py --seeds 42 7 123 314 271 --total-steps 1024
+--source-dir vendor/pythonclaw/pythonclaw --output-dir results/training_converged
+--alpha 0.5 --beta 1.0 --gamma 1.0 --p-skills -1.0` then `render_metric_curves.py
+--training-dir results/training_converged`.)
+
 ---
 
 ## 6. Bug report — real bugs in PythonClaw
@@ -187,8 +215,12 @@ dead code. An appendix covers our own harness defects.
 
 ## 7. Honest limitations
 
-- **Smoke-scale budget.** 256 steps/seed is a smoke run; point estimates are
-  directional, not convergence-scale (hence the negative mean reward).
+- **Budget vs. convergence.** 256 steps/seed is a smoke run; point estimates are
+  directional, not convergence-scale (hence the near-zero/negative mean reward).
+  An **extended 4×-budget run (1,024 steps) with the ablation-best coefficients
+  also breaks even** (−0.055 ± 0.019, n=5; §5.4), so decisive net-positive
+  refactoring would require a substantially larger budget (≫1k steps) and/or a
+  reward upgrade — this is measured, not assumed.
 - **Single module / single corpus.** Only the `Skills` layer is analysed; no
   cross-project claim is made. Training, the before/after graphs, and the bug
   report all run on the **real** upstream (github.com/ericwang915/PythonClaw @
