@@ -2,10 +2,21 @@
 
 ## §0 Honest status
 
-This document is the empirical companion to docs/ESSAY.md §4. Numbers are populated
-by results/ablations/ via scripts/_ablation_lib.py + the AB-SDK `Ablation` object.
+This document is the empirical companion to docs/ESSAY.md §4.
+
+> **Graph scope (Phase 5, 2026-06-08).** The **headline 5-seed PPO training**
+> runs on the **real PythonClaw** dependency graph (`ericwang915/PythonClaw` @
+> `7787bb43`; 1,190 nodes / 3,300 edges) — see README §5.1 and
+> `results/training/aggregate.json`. The **reward-coefficient ablation below
+> stays on the controlled `sample_skills` corpus** (30-node skills graph): its
+> purpose is to isolate the *sensitivity* of α/β/γ/P_skills, and a full real-graph
+> ablation (81 cells × 5 seeds × ~2.5 min/seed ≈ **17 h**) exceeds the wall-clock
+> budget. The controlled corpus holds graph topology fixed so the coefficient
+> effect is not confounded by graph size — the appropriate setting for a
+> sensitivity study. This split is stated plainly rather than blurred.
+
 Per the architect-locked honesty policy, n_ok is reported honestly per cell. After
-the RC-4 fix all cells reach n_ok=5, so no padding or imputation is needed.
+the RC-4 fix all ablation cells reach n_ok=5, so no padding or imputation is needed.
 
 AB-EXEC completed at the full ADR-006 floor: **81 cells × 5 seeds (405/405 rows
 status=ok)** after the RC-4 fix. §2–§6 carry real numbers from

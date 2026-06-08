@@ -59,12 +59,17 @@ AST-level test (`tests/architecture/test_env_no_gym.py`).
 
 ## 2. The Skills graph (input)
 
-GRAPHIFY parses the 10-skill corpus under `src/pythonclaw_shim/sample_skills/`
-(30 JSON files: each skill = L1 `metadata` + L2 `instructions` + L3
-`resources`) into a `networkx.DiGraph` whose edges are the `depends_on`
-relations. **Input token volume: 9,297 `cl100k_base` tokens** (L1=881 / L2=2,905
-/ L3=5,511) — the lazy-load design means an agent touching only L1 pays 881,
-a **10.5× saving** (see [COST_ANALYSIS §0.1](docs/COST_ANALYSIS.md)).
+GRAPHIFY (AST-based, `src/graphify/`) parses the **real PythonClaw source**
+([`ericwang915/PythonClaw`](https://github.com/ericwang915/PythonClaw), pinned
+SHA `7787bb43`, fetched into git-ignored `vendor/` via
+`scripts/fetch_pythonclaw.py`) into a `networkx.DiGraph` of **1,190 nodes /
+3,300 edges** (modules, classes, methods, functions + import/call/inheritance
+edges), and a **72-module** architectural view. The skills themselves use the
+real L1/L2/L3 design: 36 `SKILL.md` files (L1 frontmatter + L2 body) + bundled
+`.py` (L3). **Input token volume: 109,396 `cl100k_base` tokens** (whole package;
+55,848 for the Skills subsystem) — see [COST_ANALYSIS §0.1](docs/COST_ANALYSIS.md).
+The 30-JSON shim under `src/pythonclaw_shim/sample_skills` is retained only as a
+unit-test fixture (ADR-001 resolution).
 
 ---
 
@@ -72,22 +77,21 @@ a **10.5× saving** (see [COST_ANALYSIS §0.1](docs/COST_ANALYSIS.md)).
 
 ![Obsidian before](results/figures/obsidian_before.png)
 
-What the reverse-engineered graph tells us about the **current** architecture:
+What the reverse-engineered graph tells us about the **real PythonClaw**
+architecture (full analysis: [`docs/BUG_REPORT.md`](docs/BUG_REPORT.md),
+`results/data/real_pythonclaw_analysis.json`):
 
-- **Central node / bottleneck: `python_execution`.** It has the highest
-  afferent coupling (**fan-in 4** — depended on by `code_review`,
-  `diagram_creator`, `refactoring_planner`, `test_generator`) and is the
-  **only node with non-zero betweenness centrality** (≈0.00246, mean over 5
-  seeds). It is the module's single point of structural fragility: a change
-  here ripples to five skills.
-- **Dependencies.** 10 `depends_on` edges across 8 connected skills; `file_search`
-  is the most-depended-upon sink (fan-in 3); the chain
-  `markdown_formatter → documentation_writer → file_search` is the deepest path.
-- **Complexity / dead weight.** Two skills — `json_validator` and `web_search` —
-  are **orphans** (in-degree 0 *and* out-degree 0): declared but wired to
-  nothing (the README inside the corpus even mislabels them "roots").
+- **God Object / bottleneck: `core/agent.py`.** **974 LOC** (6.5× the 150-line
+  limit), the largest module; `Agent.__init__` has **fan-out 27** (wires 27
+  collaborators), `chat_stream`/`chat` fan-out 25/22. Both high afferent (5) and
+  efferent (7) coupling — the blob the whole platform hinges on.
+- **Coupling hotspot: `core/llm/base.py`.** **Fan-in 13** — the most-depended
+  module by 2.6×; a single point of structural fragility (Stable-Dependencies risk).
+- **Systemic SRP debt.** **22 of 72 modules (31%) exceed 150 LOC** — `web/app.py`
+  733, `core/tools.py` 582, `channels/telegram_bot.py` 482, `main.py` 409,
+  `core/skillhub.py` 357. Total package 11,046 LOC.
 
-Full per-skill node sizing = `min(LOC·8, 500)`; layer colour = L1/L2/L3.
+(0 module-level import cycles — the smells are size/coupling, not circularity.)
 
 ---
 
@@ -101,8 +105,8 @@ collapses the graph to a degenerate ~2-node pair that reads as a broken figure
 (rationale in `scripts/capture_obsidian_after.py`).
 
 How the topology changed: the policy applies SPLIT / MERGE / REWIRE edits that
-redistribute edges away from the `python_execution` hub and fold low-similarity
-leaves together, while the action mask forbids moves that would break the
+redistribute edges away from the `core.agent` god-module hub and decompose
+oversized modules, while the action mask forbids moves that would break the
 L1→L3 lazy-load contract.
 
 > **Honest framing.** At the 256-step *smoke* budget the **net** metric gain is
@@ -117,16 +121,25 @@ L1→L3 lazy-load contract.
 
 ## 5. Metric & ablation analysis
 
-### 5.1 Reward over training (D6)
+### 5.1 Reward over training (D6) — on the **real** PythonClaw graph
 
 ![Reward vs step](results/learning_curves/reward_vs_episode.png)
 
-Mean ± 95% CI over **all 5 sealed seeds** {42, 7, 123, 314, 271}, 256 steps each.
-Reward = `α·ΔModularity + β·ΔCohesion − γ·Coupling + P_skills` (Newman-Girvan Q
-for modularity). Per-seed finals: 42=−0.440, 7=−0.141, 123=−0.690, 314=−0.595,
-271=−0.440 ⇒ **−0.461 ± 0.186**.
+Mean ± 95% CI over **all 5 sealed seeds** {42, 7, 123, 314, 271}, 256 steps each,
+on the real 1,190-node PythonClaw dependency graph (~130–150 s/seed). Reward =
+`α·ΔModularity + β·ΔCohesion − γ·Coupling + P_skills` (Newman-Girvan Q). Per-seed
+finals: 42=−0.066, 7=−0.006, 123=−0.034, 314=−0.008, 271=−0.022 ⇒
+**−0.027 ± 0.022** — on the real graph the policy nearly breaks even (vs −0.461 on
+the smaller controlled corpus), i.e. its refactor edits roughly hold modularity
+steady at the 256-step smoke budget.
 
 ### 5.2 Reward-coefficient ablation (81 cells × 5 seeds = 405 runs, all ok)
+
+> Run on the **controlled `sample_skills` corpus** (fixed 30-node topology) to
+> *isolate* α/β/γ/P_skills sensitivity — a full real-graph ablation
+> (81×5×~2.5 min ≈ 17 h) exceeds budget, and holding topology fixed is the right
+> setting for a sensitivity study (see [ANALYSIS §0](docs/ANALYSIS.md)). The
+> headline training in §5.1 is on the real graph.
 
 ![Ablation heatmap](results/figures/ablation_heatmap.png)
 
@@ -147,29 +160,29 @@ budget. CIs use Student-t at dof=4 (n=5). Full breakdown + marginals:
 
 ![Betweenness CI](results/figures/betweenness_ci.png)
 
-Computed **exactly twice per seed** (training start + end) across 5 seeds,
-reported as mean ± 95% CI (`results/data/betweenness_table.csv`). `python_execution`
-is the sole node carrying non-zero betweenness throughout.
+Computed **exactly twice per seed** (training start + end) across 5 seeds on the
+real 1,190-node graph, reported as mean ± 95% CI (`results/data/betweenness_table.csv`).
 
 ---
 
-## 6. Bug report — architectural smells in the Skills module
+## 6. Bug report — bugs in the **real** PythonClaw
 
-Two **architectural** bugs surfaced by the GRAPHIFY + betweenness reverse
-engineering (brief §3). Full write-up: [`docs/BUG_REPORT.md`](docs/BUG_REPORT.md).
+Found by GRAPHIFY reverse-engineering (pinned SHA `7787bb43`) + code review of the
+flagged hubs. Full write-up: [`docs/BUG_REPORT.md`](docs/BUG_REPORT.md).
 
-1. **Orphan skills (`json_validator`, `web_search`)** — both have in-degree 0
-   *and* out-degree 0; dead structural weight that depresses module modularity
-   and is unreachable by any dependency-driven refactor. The corpus README even
-   mislabels them as "roots."
-2. **Coupling hotspot (`python_execution`)** — fan-in 4 and sole non-zero-
-   betweenness node, yet it still carries an outgoing edge (→`file_search`), so
-   it is **not** maximally stable (instability I = 1/5 = 0.2) despite four
-   dependents — a Stable-Dependencies-Principle violation and the module's
-   fragility hub.
+1. **🔴 Command injection (CWE-78) in `core/tools.py::run_command`** — a
+   **PRIMITIVE_TOOL always available to the LLM** runs its model-supplied argument
+   through `subprocess.run(command, shell=True)` with **no allow-list and no
+   sandbox**, while the *same file* sandboxes every file operation. A prompt
+   injection (a malicious page the agent reads) → arbitrary RCE. A **real,
+   exploitable security defect** — not a smell.
+2. **🟠 God Object — `core/agent.py` (1,151 LOC).** The `Agent` class wires **27
+   collaborators** in one `__init__`; the largest, most-coupled module — a genuine
+   architectural anti-pattern (maintainability), surfaced as the top fan-out node.
 
-(An appendix in `BUG_REPORT.md` also documents two training-harness defects
-found and fixed during the build, incl. the seed-123/314 Louvain hang.)
+(§3 of `BUG_REPORT.md` also lists structural *smells* — coupling to `llm/base.py`,
+oversized modules — **honestly labelled as smells, not bugs**. PythonClaw has no
+import cycles or dead code. An appendix covers our own harness defects.)
 
 ---
 

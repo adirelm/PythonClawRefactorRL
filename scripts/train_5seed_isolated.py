@@ -36,10 +36,11 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--seeds", type=int, nargs="+", default=DEFAULT_SEEDS)
     p.add_argument("--total-steps", type=int, default=DEFAULT_TOTAL_STEPS)
     p.add_argument("--per-seed-timeout-s", type=int, default=DEFAULT_TIMEOUT_S)
+    p.add_argument("--source-dir", default=None, help="GRAPHIFY source (default: train_ppo's default)")
     return p.parse_args()
 
 
-def _run_one_seed(seed: int, total_steps: int, timeout_s: int) -> dict:
+def _run_one_seed(seed: int, total_steps: int, timeout_s: int, source_dir: str | None = None) -> dict:
     """Spawn fresh `train_ppo.py --seeds N`, time-boxed; report status row."""
     log_path = Path("/tmp") / f"a4_5seed_iso_seed_{seed}.log"
     cmd = [
@@ -51,6 +52,8 @@ def _run_one_seed(seed: int, total_steps: int, timeout_s: int) -> dict:
         "--total-steps",
         str(total_steps),
     ]
+    if source_dir:
+        cmd += ["--source-dir", str(source_dir)]
     t0 = time.perf_counter()
     try:
         with log_path.open("w", encoding="utf-8") as fh:
@@ -123,7 +126,7 @@ def main() -> int:
             f"[{time.strftime('%H:%M:%S')}] seed={seed} starting (timeout={args.per_seed_timeout_s}s)...",
             flush=True,
         )
-        row = _run_one_seed(seed, args.total_steps, args.per_seed_timeout_s)
+        row = _run_one_seed(seed, args.total_steps, args.per_seed_timeout_s, args.source_dir)
         statuses.append(row)
         print(
             f"[{time.strftime('%H:%M:%S')}] seed={seed} {row['status']} elapsed={row['elapsed_s']}s log={row['log']}",

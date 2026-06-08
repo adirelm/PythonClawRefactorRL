@@ -34,8 +34,27 @@ TOP = 8
 LOC_LIMIT = 150  # professional file-size limit (CLAUDE.md §1)
 
 
+def _resolve(importer: str, level: int, module: str | None, mods: set[str]) -> str | None:
+    """Resolve a (possibly relative) ImportFrom target to an exact known module.
+
+    Precise — NOT a fuzzy tail match — so stdlib imports (``base64``) and
+    coincidental name collisions are never counted. Returns the matched module
+    dotted-path, or None if the target is external/unresolved.
+    """
+    mod = (module or "").replace("pythonclaw.", "")
+    if level:  # relative import: walk up from the importer's package
+        base = importer.split(".")[:-level] if level <= len(importer.split(".")) else []
+        cand = ".".join([*base, mod]) if mod else ".".join(base)
+    else:
+        cand = mod
+    if cand in mods:
+        return cand
+    # `from pkg import name` where name is a submodule file → pkg.name
+    return cand if cand in mods else None
+
+
 def _module_graph(src: Path) -> nx.DiGraph:
-    """Module-level import graph (the architectural view)."""
+    """Module-level import graph (the architectural view), exact import resolution."""
     mods = {
         ".".join(p.relative_to(src).with_suffix("").parts): p
         for p in src.rglob("*.py")
@@ -49,16 +68,12 @@ def _module_graph(src: Path) -> nx.DiGraph:
         except SyntaxError:
             continue
         for node in ast.walk(tree):
-            if (
-                isinstance(node, ast.ImportFrom)
-                and node.module
-                and (node.level or "pythonclaw" in node.module)
+            if isinstance(node, ast.ImportFrom) and (
+                node.level or (node.module and "pythonclaw" in node.module)
             ):
-                tail = node.module.split(".")[-1]
-                for m in mods:
-                    if (m == node.module.replace("pythonclaw.", "") or m.endswith("." + tail)) and m != mod:
-                        g.add_edge(mod, m)
-                        break
+                tgt = _resolve(mod, node.level, node.module, set(mods))
+                if tgt and tgt != mod:
+                    g.add_edge(mod, tgt)
     return g
 
 

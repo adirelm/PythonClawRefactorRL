@@ -12,25 +12,29 @@ from live measurement (not estimates).
 
 ### §0.1 Token volume of the Skills-module code (the analysed input)
 
-Measured with `src.cost.meter.TripleCounter` (`cl100k_base`) over all 30 JSON
-files of `src/pythonclaw_shim/sample_skills/` (the GRAPHIFY input corpus):
+Measured with `src.cost.meter.TripleCounter` (`cl100k_base`) over the **real
+PythonClaw** source (`vendor/pythonclaw/pythonclaw`, pinned SHA `7787bb43`):
 
-| Layer | files | tokens | share |
-|---|---:|---:|---:|
-| L1 — `*.metadata.json` (always loaded) | 10 | 881 | 9.5% |
-| L2 — `*.instructions.json` (lazy) | 10 | 2,905 | 31.2% |
-| L3 — `*.resources.json` (lazy) | 10 | 5,511 | 59.3% |
-| **Total** | **30** | **9,297** | **100%** |
+| Scope | files | tokens |
+|---|---:|---:|
+| Whole `pythonclaw/` package (GRAPHIFY input) | 72 `.py` | **109,396** |
+| Skills subsystem — loader (`skill_loader.py` + `skillhub.py`) | 2 | 6,535 |
+| Skills subsystem — 36 `SKILL.md` (L1 metadata + L2 instructions) | 36 | 19,137 |
+| Skills subsystem — 31 skill `.py` (L3 resources) | 31 | 30,176 |
+| **Skills subsystem total (loader + templates)** | **69** | **55,848** |
 
-Appendix sensitivity: **34,781 chars · 34,795 bytes ⇒ 3.74 chars/token,
-3.74 bytes/token** (near-ASCII corpus; chars≈bytes). The **lazy-load design
-is what makes this matter**: an agent that touches only L1 metadata pays
-**881 tokens**, not 9,297 — a **10.5× reduction**. Eagerly loading every
-skill's L3 resources (the `P_skills` lazy-load-break penalty exists to
-discourage exactly this) would cost the full 9,297 tokens up front.
+The **L1/L2/L3 lazy-load design is what makes this matter**: an agent that loads
+only the L1 frontmatter of all 36 skills pays a few hundred tokens, not the
+55,848-token Skills corpus or the 109k-token package — the same ~10× saving the
+real OpenClaw Skills architecture is built around (and the `P_skills` reward
+penalty discourages breaking).
 
-Reproduce: `uv run python -c "from src.cost.meter import TripleCounter; ..."`
-(see §6) — deterministic given the pinned `cl100k_base` encoding.
+> Historical note: the earlier shim corpus (`src/pythonclaw_shim/sample_skills`,
+> 30 JSON files) measured **9,297 tokens**; it is now retained only as a
+> unit-test fixture (ADR-001 resolution).
+
+Reproduce: `uv run python scripts/fetch_pythonclaw.py` then tokenise
+`vendor/pythonclaw/pythonclaw/**/*.py` with `TripleCounter` (`cl100k_base`).
 
 ### §0.2 PPO training computational runtime
 
