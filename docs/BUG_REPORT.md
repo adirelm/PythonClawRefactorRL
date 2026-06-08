@@ -1,151 +1,130 @@
-# Bug Report
+# Bug Report — Architectural Bugs in the Real PythonClaw Skills Module
 
-> **Brief §3 deliverable.** Two **architectural bugs in the PythonClaw `Skills`
-> module** that the GRAPHIFY reverse-engineering + RL refactoring engagement
-> exposed and isolated. Both are *structural* smells (not behavioural crashes —
-> see PRD §6.2 L4): they are properties of the skill dependency graph that the
-> agent's modularity / coupling / betweenness analysis surfaces directly.
+> **Brief §3 deliverable.** Architectural bugs in the **real PythonClaw**
+> codebase ([github.com/ericwang915/PythonClaw](https://github.com/ericwang915/PythonClaw),
+> the Python port of OpenClaw published on PyPI as `pythonclaw`), surfaced by the
+> GRAPHIFY reverse-engineering of its actual source — **not** a stand-in. Every
+> number below is reproducible:
 >
-> An **appendix** documents two engineering defects found and fixed in the RL
-> training pipeline itself during the build — these are not Skills-module bugs,
-> but they are recorded for rigor and because they shaped the experiment trail.
+> ```bash
+> uv run python scripts/fetch_pythonclaw.py      # clones at pinned SHA 7787bb4 (v0.6.6)
+> uv run python scripts/analyze_real_pythonclaw.py   # → results/data/real_pythonclaw_analysis.json
+> ```
+>
+> Pinned source: commit `7787bb43` (v0.6.6, 2026-03-08). GRAPHIFY parses the
+> `pythonclaw/` package via AST into a dependency graph of **1,190 nodes /
+> 3,300 edges** (module/class/method/function), and a **72-module** import view.
 
 ## Method (how the bugs were exposed)
 
-1. `src/graphify/local_impl.py` parses the 10-skill `sample_skills` corpus into a
-   `networkx.DiGraph` whose edges are the `depends_on` relations declared in each
-   skill's `*.metadata.json` (L1).
-2. The environment derives **modularity** (Newman-Girvan Q), per-node **fan-in /
-   fan-out coupling**, and **betweenness centrality** (brief §2.2, computed twice
-   per seed across 5 seeds — `results/data/betweenness_table.csv`).
-3. The two bugs below fall straight out of those structural measures — no
-   behavioural test of PythonClaw was needed, consistent with the brief's
-   "structural bug discovery via reverse engineering" framing.
+1. `scripts/fetch_pythonclaw.py` clones the real upstream at a pinned SHA into
+   `vendor/` (git-ignored, so the third-party 974-LOC files don't pollute our
+   own ≤150-LOC gate).
+2. `src/graphify/local_impl.py` (`LocalGraphify`, AST-based) builds the real
+   dependency graph; `scripts/analyze_real_pythonclaw.py` computes module-level
+   coupling, file sizes, fan-in/out, and import cycles.
+3. The bugs below fall straight out of those structural measures — consistent
+   with the brief's "structural bug discovery via reverse engineering" framing
+   (we do not run PythonClaw's behaviour; these are architecture smells, see PRD §6.2 L4).
 
 ---
 
-## Bug 1 (architectural): Orphan skills — `json_validator` and `web_search` are disconnected from the dependency graph
+## Bug 1 (architectural): God Object — `core/agent.py` (`Agent`) concentrates the whole system
 
-- **Severity**: MEDIUM — dead structural weight; depresses module modularity and
-  is unreachable by any dependency-driven refactor.
+- **Severity**: HIGH — the module the entire platform hinges on is unmaintainable and untestable in isolation.
 
-- **Finding**: In the reverse-engineered dependency graph, `json_validator` and
-  `web_search` both have **in-degree 0 AND out-degree 0** — they neither depend on
-  any skill nor are depended upon by any skill. Every other skill participates in
-  at least one `depends_on` edge.
+- **Finding**: `pythonclaw/core/agent.py` is **974 LOC** (non-blank, non-comment) —
+  **6.5× the 150-line professional limit** and the single largest module in the
+  codebase. Its `Agent` class is a textbook **God Object**:
+  - `Agent.__init__` has **fan-out 27** — the constructor directly wires 27
+    distinct collaborators (LLM clients, memory manager, session store, tools,
+    skill loader, RAG retriever, compaction, …).
+  - `Agent.chat_stream` (fan-out **25**) and `Agent.chat` (fan-out **22**) are the
+    next-largest methods in the whole graph.
+  - The module carries both high **afferent** coupling (fan-in 5) and high
+    **efferent** coupling (fan-out 7) — everything depends on it *and* it depends
+    on everything.
 
-- **Evidence**:
-  - Dependency-graph computation over `src/pythonclaw_shim/sample_skills/*.metadata.json`:
-    edge set is 10 edges across 8 skills; `json_validator` and `web_search` appear
-    in zero edges.
-  - `results/data/betweenness_table.csv`: `skill.web_search.L{1,2,3}` and
-    `skill.json_validator.L1` all report `mean_before = 0.0` betweenness across all
-    5 seeds — they lie on **no** dependency path.
-  - **Documentation contradiction**: `sample_skills/README.md` lists
-    `web_search` and `json_validator` under **"Roots"**. A root is a node with
-    *outgoing* edges to its dependencies; these two have none. They are **isolated
-    nodes**, not roots — the README mischaracterises them, which is itself the
-    architectural-intent bug (a skill declared but never wired in).
+- **Evidence**: `results/data/real_pythonclaw_analysis.json` →
+  `god_modules_by_loc[0] = [974, "core.agent"]`,
+  `top_method_fan_out[0] = [27, "core.agent.Agent.__init__"]`.
 
-- **Impact**:
-  - Modularity (Q): each orphan is forced into its own singleton community,
-    lowering the achievable community structure of the module.
-  - RL refactor reachability: the `MERGE` action requires a top-M cosine-similar
-    *neighbour* (`src/env/action_mask.py::_topm_similar`); with no edges, the
-    orphans are never productive MERGE partners, so the agent cannot fold them in.
-  - Maintenance: an orphan skill is either dead code (should be removed) or
-    missing wiring (a consumer edge was never declared) — both are latent defects.
+- **Impact**: any change to session handling, memory, LLM routing, or skills
+  risks touching `agent.py`; it cannot be unit-tested without standing up the
+  entire stack; it is the module the RL refactoring agent most wants to **SPLIT**.
 
-- **Recommended refactor**: either (a) remove the orphans if genuinely unused, or
-  (b) declare the missing `depends_on` edge that a real consumer needs (e.g. a
-  validation step in `code_review` plausibly should `depends_on: [json_validator]`).
+- **Recommended refactor**: extract collaborators behind interfaces and inject
+  them (Dependency Inversion) — e.g. split `Agent` into a thin orchestrator plus
+  `ChatSession`, `MemoryGateway`, `SkillDispatcher` units, dropping `__init__`
+  fan-out toward single digits and the file under 150 LOC.
 
 ---
 
-## Bug 2 (architectural): Coupling hotspot — `python_execution` is a single point of structural fragility
+## Bug 2 (architectural): Coupling hotspot — `core/llm/base.py` is a single point of fragility
 
-- **Severity**: HIGH — highest afferent coupling and the only non-zero-betweenness
-  node; a change here ripples to four dependents.
+- **Severity**: MEDIUM-HIGH — the most-depended-upon module; a change here ripples to 13 modules.
 
-- **Finding**: `python_execution` has **fan-in 4** — it is depended upon by
-  `code_review`, `diagram_creator`, `refactoring_planner`, and `test_generator`
-  (the next-highest fan-in is `file_search` at 3). It is also the **only** node
-  with non-zero betweenness centrality in the graph.
+- **Finding**: `pythonclaw/core/llm/base.py` has the **highest afferent coupling
+  in the codebase — fan-in 13** (2.6× the next module, `session_manager`/`core.tools`
+  at 5). Thirteen modules import the LLM base abstraction directly.
 
-- **Evidence**:
-  - Fan-in tally over the metadata graph: `python_execution = 4`, `file_search = 3`,
-    `code_review = 2`, `documentation_writer = 1`, all others 0.
-  - `results/data/betweenness_table.csv`: `skill.python_execution.L1` is the sole
-    node with `mean_before > 0` (≈ 0.00246 before refactor, rising to ≈ 0.00286
-    after) — it lies on the most dependency paths of any node, across all 5 seeds.
+- **Evidence**: `results/data/real_pythonclaw_analysis.json` →
+  `top_module_fan_in[0] = ["core.llm.base", 13]`.
 
-- **Why it is a bug (Stable Dependencies Principle, R. Martin)**: a node that four
-  others depend on should be **maximally stable** (instability I = fan-out /
-  (fan-in + fan-out) → 0). `python_execution` instead carries an outgoing edge
-  (`→ file_search`), giving it I = 1 / (4 + 1) = **0.2** — non-zero. A change in
-  `file_search` therefore propagates *through* `python_execution` to all four of
-  its dependents. The most-depended-upon skill is not the most stable, which is
-  the SDP violation.
+- **Why it is a bug**: a hub with 13 dependents must be **maximally stable** and
+  minimal (Stable Dependencies Principle). In practice the LLM layer mixes the
+  base contract with three concrete clients (`anthropic_client`, `gemini_client`,
+  `openai_compatible`) and a `response` model; any change to the shared base
+  (new provider field, signature tweak) forces re-validation across all 13
+  consumers — a wide, fragile blast radius.
 
-- **Impact**:
-  - The agent's betweenness analysis (brief §2.2) flags `python_execution` as the
-    highest-value refactor target; a SPLIT that separates its file-search-dependent
-    behaviour from its dependency-free core would raise module stability.
-  - Until then it is the module's fragility hub: the blast radius of any change is
-    five skills.
-
-- **Recommended refactor**: SPLIT `python_execution` into a dependency-free core
-  (depended upon by the four consumers) and a thin `file_search`-coupled adapter,
-  so the hub becomes maximally stable (I = 0).
+- **Recommended refactor**: freeze a minimal `LLMClient` Protocol in `base.py`
+  (method signatures only) and move all changeable logic into the concrete
+  clients, so the 13 dependents couple only to a stable interface.
 
 ---
 
-## Appendix — Engineering defects found & fixed in the RL training pipeline
+## Bug 3 (architectural, systemic): Pervasive Single-Responsibility violation — 22 of 72 modules exceed 150 LOC
 
-> These are **not** Skills-module architectural bugs. They are defects in *our own*
-> training harness, surfaced and fixed during the build. Recorded for rigor and
-> because they gate the 5-seed result reported in EXPERIMENTS P3-E1.
+- **Severity**: MEDIUM — module-level erosion of separation of concerns across the codebase.
 
-### A1 — `Categorical(logits=all_-inf)` NaN-explosion on an all-False action mask
+- **Finding**: **22 of the 72 modules (31%)** exceed the 150-LOC professional
+  limit. The worst offenders after `core.agent` (974):
+  `web/app.py` **733**, `core/tools.py` **582**, `channels/telegram_bot.py` **482**,
+  `main.py` **409**, `core/skillhub.py` **357**. Total package: **11,046 LOC**.
 
-- **Symptom**: pre-fix (`71f0213`), `PolicyNet.get_action` fed an all-`-inf` row
-  into `torch.distributions.Categorical` on degenerate sub-graphs (every SPLIT /
-  MERGE / REWIRE illegal), producing NaN probabilities and a hanging `.sample()`.
-- **Root cause**: the NOOP slot was not pinned True before `masked_fill` when the
-  mask was otherwise all-False.
-- **Fix** (`5dd14ca`, `src/model/policy_net.py:113-118`): force the NOOP slot True
-  on any all-False row before masking — preserving the Huang & Ontañón (2022)
-  invalid-action-masking guarantee.
-- **Regression test**: `tests/architecture/test_policy_net_categorical_safe.py` (4 cases, green).
+- **Evidence**: `results/data/real_pythonclaw_analysis.json` →
+  `modules_over_150_loc` (22 entries).
 
-### A2 — Louvain community detection wedged on degenerate mid-rollout topologies
+- **Impact**: nearly a third of the codebase carries multiple responsibilities
+  per file — `web/app.py` mixes routing, websockets, and rendering;
+  `core/tools.py` is a catch-all. This is the structural debt the RL agent's
+  SPLIT/EXTRACT actions are rewarded for reducing (the `ΔModularity` / `ΔCohesion`
+  reward terms).
 
-- **Symptom**: pre-fix, `compute_modularity → networkx.louvain_communities` blocked
-  for 10-20 s (originally hours) on specific mid-rollout graph snapshots produced by
-  the agent's SPLIT/MERGE actions; seeds 123 and 314 timed out.
-- **Root-cause evolution**:
-  - RC-1 (`44b313f`/`d489306`): per-snapshot partition sharing (6 → 2 Louvain calls
-    per `env.step`) + structural-key cache + a daemon-thread watchdog. This reduced
-    but did not eliminate the wedge — **orphaned daemon threads accumulated and
-    contended for the GIL**, so seeds 123/314 still timed out at 3/5.
-  - **RC-4 (current fix)**: replaced the daemon-thread watchdog with a `signal.SIGALRM`
-    1-second hard cut that raises in the *calling* thread (no threads, no GIL
-    accumulation), plus stored action masks in `Trajectory` to eliminate ~1024
-    `compute_mask` recomputations per PPO update.
-- **Outcome (RESOLVED)**: **all 5 seeds {42, 7, 123, 314, 271} now complete** within
-  the per-seed budget (~10 s each). Mean final reward −0.461 ± 0.186 (n=5).
-  `results/training/aggregate.json` reports `num_seeds=5`. The −2 honesty penalty
-  pre-committed for a 3/5 outcome (PRD §7) is therefore **lifted** per the project's
-  own rule (`5/5 → done`).
-- **Regression tests**: `tests/architecture/test_modularity_wedge_regression.py`,
-  `tests/unit/services/metrics/test_modularity_watchdog.py`.
+- **Recommended refactor**: split each oversized module along its responsibility
+  seams (e.g. `web/app.py` → `routes/`, `ws/`, `render/`).
+
+---
+
+## Appendix — Engineering defects found & fixed in our own RL training pipeline
+
+> Not PythonClaw bugs — defects in *our* harness, surfaced and fixed during the
+> build. Kept for rigor; they gate the 5-seed result in EXPERIMENTS P3-E1.
+
+- **A1 — `Categorical(logits=all_-inf)` NaN on an all-False action mask.** Fixed
+  (`5dd14ca`) by pinning the NOOP slot True before `masked_fill`
+  (`src/model/policy_net.py`); regression test `test_policy_net_categorical_safe.py`.
+- **A2 — Louvain wedge on degenerate mid-rollout topologies.** Fixed via RC-4: a
+  `signal.SIGALRM` 1-second hard cut (no daemon-thread GIL leak) + stored action
+  masks in `Trajectory`. All 5 seeds now train; regression tests
+  `test_modularity_wedge_regression.py`, `test_modularity_watchdog.py`.
 
 ---
 
 ## Cross-references
 
-- Dependency graph source: `src/pythonclaw_shim/sample_skills/*.metadata.json`
-- Betweenness evidence: `results/data/betweenness_table.csv` (n=5), `results/figures/betweenness_ci.png`
-- Skills architecture deep-dive: `docs/SKILLS_ARCHITECTURE.md`
-- Reward / instrumentation ADR: `docs/adr/ADR-007-reward-upgrade-MUST.md`
-- Fix commits: A1 `5dd14ca`; A2 RC-1 `44b313f`/`d489306`, RC-4 (current branch)
+- Pinned source + reproduction: `scripts/fetch_pythonclaw.py`, `scripts/analyze_real_pythonclaw.py`
+- Real findings artefact: `results/data/real_pythonclaw_analysis.json`
+- Real dependency graph: `results/graphify_output.gpickle` (1,190 nodes)
+- Source decision: `docs/adr/ADR-001-pythonclaw-shim-boundary.md`

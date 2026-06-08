@@ -56,3 +56,6 @@ Thumbs.db
 # Stray PDFs (allow only those under docs/assets/)
 *.pdf
 !docs/assets/*.pdf
+
+# Vendored upstream source under analysis (fetched at pinned SHA via scripts/fetch_pythonclaw.py)
+vendor/

@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 LIMIT = 150
-EXCLUDED_DIRS = {".venv", ".git", "build", "dist", "__pycache__", ".ruff_cache", ".pytest_cache"}
+EXCLUDED_DIRS = {".venv", ".git", "build", "dist", "__pycache__", ".ruff_cache", ".pytest_cache", "vendor"}
 
 
 def count_loc(path: Path) -> int:

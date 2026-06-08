@@ -2,11 +2,34 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Accepted |
-| **Date** | 2026-06-04 |
+| **Status** | **Resolved — swapped to real upstream (2026-06-08)** |
+| **Date** | 2026-06-04 (resolved 2026-06-08) |
 | **Decider** | solo developer (architect role per CLAUDE.md §1.4) |
 | **Supersedes** | — |
-| **Superseded by** | — (24h swap window; see §6.1) |
+| **Superseded by** | — |
+
+## 0. RESOLUTION (2026-06-08) — OQ-1 closed, real source swapped in
+
+Open Question OQ-1 (canonical PythonClaw URL/SHA) is **resolved**. The official
+PythonClaw is **[github.com/ericwang915/PythonClaw](https://github.com/ericwang915/PythonClaw)**
+— the Python port of OpenClaw, published on PyPI as `pythonclaw` (it owns the
+`pythonclaw` name on both GitHub and PyPI and ships the exact L1/L2/L3
+metadata/instructions/resources Skills subsystem the brief describes).
+
+Per the 24h-swap contract (§6.1), the project **now analyses the real upstream
+source**, pinned at commit **`7787bb43`** (v0.6.6, 2026-03-08), fetched via
+`scripts/fetch_pythonclaw.py` into the git-ignored `vendor/` directory (so the
+third-party 974-LOC files don't pollute our ≤150-LOC / ruff gates).
+
+- **GRAPHIFY graph** (`results/graphify_output.gpickle`) + **bug report**
+  (`docs/BUG_REPORT.md`) are computed on the real `pythonclaw/` package
+  (1,190 nodes / 3,300 edges; 72-module view) — see
+  `results/data/real_pythonclaw_analysis.json` + `scripts/analyze_real_pythonclaw.py`.
+- **`src/pythonclaw_shim/sample_skills`** is retained only as a tiny deterministic
+  **unit-test fixture**, not the analysed artefact.
+
+The §1–§6 narrative below is preserved as the historical rationale for using the
+shim during Days 1–4 before the URL was confirmed.
 
 ## 1. Context
 
