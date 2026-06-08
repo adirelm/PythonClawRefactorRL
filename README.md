@@ -189,11 +189,13 @@ dead code. An appendix covers our own harness defects.
 
 - **Smoke-scale budget.** 256 steps/seed is a smoke run; point estimates are
   directional, not convergence-scale (hence the negative mean reward).
-- **PythonClaw shim.** Until the upstream URL is confirmed, the agent trains
-  against an in-tree shim (ADR-001, 24h swap window); claims about
-  "PythonClaw's architecture" are strictly claims about the shim.
 - **Single module / single corpus.** Only the `Skills` layer is analysed; no
-  cross-project claim is made.
+  cross-project claim is made. Training, the before/after graphs, and the bug
+  report all run on the **real** upstream (github.com/ericwang915/PythonClaw @
+  `7787bb43`, v0.6.6 — vendored via `scripts/fetch_pythonclaw.py`, GRAPHIFY'd to
+  1,190 nodes; OQ-1 resolved, ADR-001). The `pythonclaw_shim` is the typed adapter
+  boundary plus a 30-node `sample_skills` sandbox used only to isolate the §5.2
+  ablation — not the training/analysis target.
 - **Hand-designed reward.** α/β/γ/P_skills are author choices calibrated by the
   ablation, not learned.
 - **SB3-style abstraction & Obsidian non-determinism** — see

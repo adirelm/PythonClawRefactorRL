@@ -583,12 +583,15 @@ The submission ships as a pedagogical artefact. The following caveats
 are called out head-on (rather than buried) so the analysis in
 `docs/ANALYSIS.md` is interpreted in the right frame:
 
-- **L1 — PythonClaw URL unconfirmed.** Until the lecturer confirms the
-  canonical GitHub URL for the PythonClaw `Skills` module, the agent
-  trains against the `PythonClawShim` (ADR-001). Any claim about
-  "PythonClaw's architecture" before the swap is, strictly, a claim
-  about the shim. The 24-hour swap window is the contract: swap and
-  re-run within 24 h of URL confirmation.
+- **L1 — PythonClaw source (RESOLVED 2026-06-08).** OQ-1 (canonical URL/SHA)
+  is closed: the project now analyses and trains on the **real** upstream
+  (github.com/ericwang915/PythonClaw @ `7787bb43`, v0.6.6), vendored via
+  `scripts/fetch_pythonclaw.py` and GRAPHIFY'd to a 1,190-node graph. Per the
+  24-hour swap contract (ADR-001, now marked Resolved), the before/after graphs,
+  the bug report, and the headline training all run on the real source — not the
+  shim. The `PythonClawShim` remains only as the typed adapter boundary plus the
+  30-node `sample_skills` ablation sandbox. (Days 1–4 ran on the shim while OQ-1
+  was open; that hedge no longer applies.)
 - **L2 — Obsidian Graph View layout is non-deterministic.** Obsidian's
   force-directed layout converges to different fixed points across
   runs even with identical input vaults. The "before" / "after"
