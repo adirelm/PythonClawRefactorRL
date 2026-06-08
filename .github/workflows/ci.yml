@@ -11,6 +11,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history — tests/cost/test_collect_phase_corpora.py walks phase-boundary SHAs
       - name: Install uv
         uses: astral-sh/setup-uv@v3
         with:

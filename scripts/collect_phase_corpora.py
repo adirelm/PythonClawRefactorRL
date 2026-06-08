@@ -59,16 +59,21 @@ class Record:
 
 
 def _git_rev_list(start_sha: str, end_sha: str) -> list[str]:
-    """Return commit SHAs in phase range, oldest-first."""
+    """Return commit SHAs in phase range, oldest-first.
+
+    Degrades gracefully to ``[]`` if a boundary SHA is unreachable (e.g. a
+    shallow CI checkout without ``fetch-depth: 0``, or a rewritten history) so
+    corpus collection never hard-crashes — CI fetches full history, but this
+    keeps the script robust everywhere.
+    """
     if start_sha == "ROOT":
-        # All commits reachable from end_sha, including the root.
-        out = subprocess.check_output(["git", "rev-list", "--reverse", end_sha], cwd=REPO_ROOT, text=True)
+        spec = [end_sha]  # all commits reachable from end_sha, including the root
     else:
-        out = subprocess.check_output(
-            ["git", "rev-list", "--reverse", f"{start_sha}^..{end_sha}"],
-            cwd=REPO_ROOT,
-            text=True,
-        )
+        spec = [f"{start_sha}^..{end_sha}"]
+    try:
+        out = subprocess.check_output(["git", "rev-list", "--reverse", *spec], cwd=REPO_ROOT, text=True)
+    except subprocess.CalledProcessError:
+        return []
     return [s for s in out.splitlines() if s]
 
 
