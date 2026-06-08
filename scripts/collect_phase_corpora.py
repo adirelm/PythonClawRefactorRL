@@ -66,10 +66,8 @@ def _git_rev_list(start_sha: str, end_sha: str) -> list[str]:
     corpus collection never hard-crashes — CI fetches full history, but this
     keeps the script robust everywhere.
     """
-    if start_sha == "ROOT":
-        spec = [end_sha]  # all commits reachable from end_sha, including the root
-    else:
-        spec = [f"{start_sha}^..{end_sha}"]
+    # ROOT phase: all commits reachable from end_sha (incl. root); else the range.
+    spec = [end_sha] if start_sha == "ROOT" else [f"{start_sha}^..{end_sha}"]
     try:
         out = subprocess.check_output(["git", "rev-list", "--reverse", *spec], cwd=REPO_ROOT, text=True)
     except subprocess.CalledProcessError:
