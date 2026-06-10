@@ -49,7 +49,7 @@ uv run python scripts/render_learning_curve.py             # D6 reward curve
 | §2.2 | Degree centrality per step; **betweenness exactly 2×/seed** | `src/services/centrality.py` |
 | §2.3 | PPO (ε=0.2) + GAE (λ=0.95), γ=0.99 | `src/services/ppo_trainer.py`, `src/services/gae_buffer.py` |
 | §2.4 | Cost analysis (Skills-token volume + PPO runtime) | [`docs/COST_ANALYSIS.md`](docs/COST_ANALYSIS.md) |
-| §2.4 | **GRAPHIFY × AI agents** essay (2,994 words, 11 cites, 2 diagrams) | [`docs/ESSAY.md`](docs/ESSAY.md) |
+| §2.4 | **GRAPHIFY × AI agents** essay (≈3,000 words, 11 cites, 2 diagrams) | [`docs/ESSAY.md`](docs/ESSAY.md) |
 | math | PPO/GAE/reward equations + cross-refs | [`docs/THEORY.md`](docs/THEORY.md) |
 
 No `gymnasium` import exists anywhere under `src/env/` — enforced by an
@@ -103,6 +103,16 @@ This is a **mid-rollout snapshot** (32 of 64 steps) of the trained PPO policy
 at `seed=42` — chosen over the terminal frame because by termination the policy
 collapses the graph to a degenerate ~2-node pair that reads as a broken figure
 (rationale in `scripts/capture_obsidian_after.py`).
+
+> **Corpus note (read before comparing §3 ↔ §4).** The §3 "before" is the **real**
+> 1,190-node PythonClaw package; this "after" frame replays the policy on the
+> controlled **30-node `sample_skills`** corpus *for legibility* — the real graph
+> is an illegible hairball once edited, so the two Obsidian frames are deliberately
+> **different graphs**. The before/after frames show the *mechanism* (legal
+> structural edits); the **quantitative** real-graph topology change is in §5.3
+> (betweenness, 2×/seed) and §5.4 (per-metric modularity/cohesion/coupling), both
+> computed on the real 1,190-node graph. The −0.461 figure below is the
+> `sample_skills` result (the real-graph reward is −0.027, §5.1).
 
 How the topology changed: the policy applies SPLIT / MERGE / REWIRE edits that
 redistribute edges away from the `core.agent` god-module hub and decompose

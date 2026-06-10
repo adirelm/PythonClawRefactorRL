@@ -44,8 +44,13 @@ data/processed/
 results/checkpoints/
 results/ablation/
 
-# Extended-run (P4-E3) checkpoints are ~11 MB each; regenerate via the command in
-# docs/EXPERIMENTS.md P4-E3. The lightweight reward/metric records ARE committed.
+# Checkpoint policy (intentional split):
+#  • results/training/seed_*/checkpoint.pt (canonical 5-seed headline run) ARE
+#    committed so a grader can load/replay the trained policy without retraining
+#    (reproducibility of the §3/§5.1 headline result).
+#  • The extended P4-E3 run's checkpoints are ~11 MB each and regenerable via the
+#    command in docs/EXPERIMENTS.md P4-E3, so they are git-ignored; only their
+#    lightweight reward/metric records (rewards.csv, metrics.json, aggregate.json) ARE committed.
 results/training_converged/**/checkpoint.pt
 
 # Obsidian vault internals — keep the vault dir tracked but exclude editor state

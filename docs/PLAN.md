@@ -27,6 +27,18 @@ build sequence. Mirrors A3's PLAN structure so grader audit transfers.
 only external system is a local Python codebase snapshot that GRAPHIFY
 ingests. No network, no DB, no inference server, no auth surface.
 
+> ⚠️ **As-built reconciliation (read first).** This C4 + the §2 component table
+> below are the **original design view**. The shipped package is **`src/`** (not
+> `src/refactorrl/`); the only UI is the **CLI `python -m src.cli`**
+> (`src/cli/__main__.py`) — **no Streamlit GUI was built** (`src/gui/` is an empty
+> placeholder, no `streamlit` dependency). As-built module names differ from the
+> design names shown here (e.g. services shipped as `ppo_trainer.py` / `gae_buffer.py`
+> / `centrality.py` / `metrics/`, not `PPOService`/`GAEComputer`; model as
+> `policy_net.py` / `encoder.py`). The **authoritative as-built layout** is the
+> README "Architecture" tree + `docs/TRACE.md`; the **as-built action space** is
+> SPLIT / MERGE / REWIRE / NOOP with `A_max=45057` (`docs/ACTION_DESIGN.md`), not the
+> 4-action set named below. The diagram is retained as the design record.
+
 **Containers / layers** (External → SDK → Services → Domain → Infrastructure):
 
 ```mermaid

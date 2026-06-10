@@ -61,18 +61,22 @@ def test_services_do_not_have_forbidden_cross_imports() -> None:
     assert not violations, "Forbidden service cross-imports:\n" + "\n".join(violations)
 
 
+# Business-logic packages the CLI must reach only THROUGH the SDK (CLAUDE.md §3).
+# src.sdk is the allowed seam; src.utils (config/seeding) is shared infra.
+_CLI_FORBIDDEN_PREFIXES = ("src.env", "src.services", "src.model", "src.graphify", "src.cost")
+
+
 def test_sdk_is_single_entry_point_for_env_imports() -> None:
-    """CLI and notebook modules must not bypass the SDK to import src.env directly."""
+    """CLI modules must not bypass the SDK to import any business-logic package."""
     cli_dir = SRC / "cli"
     if not cli_dir.exists():
         return  # CLI not yet scaffolded — skip
-    forbidden_prefix = "src.env"
     violations: list[str] = []
     for py in cli_dir.rglob("*.py"):
         tree = ast.parse(py.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom):
                 mod = node.module or ""
-                if mod.startswith(forbidden_prefix):
+                if mod.startswith(_CLI_FORBIDDEN_PREFIXES):
                     violations.append(f"{py.relative_to(REPO_ROOT)} imports {mod}")
-    assert not violations, "CLI bypasses SDK by importing src.env directly:\n" + "\n".join(violations)
+    assert not violations, "CLI bypasses SDK by importing business logic directly:\n" + "\n".join(violations)

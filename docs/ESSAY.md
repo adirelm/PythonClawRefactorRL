@@ -1,8 +1,8 @@
 # GRAPHIFY × AI-agents: Complementarity in Code Refactoring
 
-> **Draft status:** complete (Phase 4 final). 2994 words, 11 cites, 11 sections, D1+D2 embedded.
+> **Status:** complete (Phase 4 final). ≈3,000 words (2500–3000 band), 11 cites, 8 sections, D1+D2 embedded.
 
-## Thesis (~150 words)
+## Thesis
 
 GRAPHIFY provides deterministic priors — call graphs, import graphs, modularity
 scores — that constrain the refactor search space. LLM-agents provide semantic
@@ -17,7 +17,7 @@ expensive, fuzzy, and irreplaceable at exactly those edges. The empirical
 question this essay engages is *where the seam belongs*, and the Phase-4
 ablation matrix is the first datapoint our project contributes toward an answer.
 
-## §1 Introduction (~500 words) — brief prompt #1: complementarity
+## §1 Introduction — the complementarity thesis
 
 Refactoring a non-trivial Python codebase is a search problem whose state space
 is too large for exhaustive enumeration and whose objective function is too
@@ -70,7 +70,7 @@ the complementarity hypothesis fails), and §5 concludes.
 
 - **Cites:** `allamanis2018graphs`, `chen2021codex`, `jimenez2024swebench`, `schulman2017ppo`.
 
-## §2 Static analysis landscape (~700 words) — brief prompt #2: AI automating SA
+## §2 Static analysis landscape — can AI automate it?
 
 The reward function this assignment optimises,
 `R_t = α·ΔModularity + β·ΔCohesion − γ·Coupling + P_skills` with sealed
@@ -148,7 +148,7 @@ in §5; everything in between is what the rest of this document defends.
   `fowler1999refactoring`, `tichy1985rcs`, `allamanis2018graphs`,
   `chen2021codex`, `jimenez2024swebench`, `liu2023chatgpt`.
 
-## §3 Methodology (~900 words)
+## §3 Methodology
 
 The refactor task is cast as an episodic Markov decision process whose
 state, action, transition, and reward are each tied directly to the
@@ -247,29 +247,35 @@ expected return up to PPO stochasticity. That is the *audit* property
 
 - **Cites:** `schulman2016gae`, `schulman2017ppo`, `huang2022masking`.
 
-## §4 Empirical lessons + limitations (~700 words) — brief prompt #3: limitations
+## §4 Empirical lessons & limitations
 
-- The 5-of-5-seed outcome on the **real PythonClaw graph** (mean reward
-  −0.027 ± 0.022, n=5) after the RC-4 fix. Locked HONESTY thresholds:
-  5/5 → promote · 4/5 → partial · 3/5 → Phase-3 −2 grade penalty · <3/5 → halt.
-  The 5/5 result maps to **promote** (no penalty).
-- The Louvain wedge story: `P4-RC-0` cProfile spike on seed=123 →
-  `nx_comm.louvain_communities → _one_level → _neighbor_weights` on
-  degenerate topologies → RC-1 watchdog/fallback → RC-4 SIGALRM hard cut
-  (the daemon-thread watchdog leaked GIL-contending threads; SIGALRM raises
-  in the calling thread, closing the wedge for seeds 123/314).
-- Empirical anchor — 81-cell ablation grid (all n_ok=5/5, 405/405 rows ok):
-  baseline (α=1.0, β=1.0, γ=0.5, P=−5.0) → −0.461; best (α=0.5, β=1.0, γ=1.0,
-  P=−1.0) → +0.098 (Δ=+0.559; only 6/81 cells are positive, all at α=0.5, γ=1.0);
-  worst (α=2.0, β=2.0,
-  γ=0.0, P=−10.0) → −1.158 (Δ=−0.697). Sobol-lite: α=2.03, β=0.92, γ=0.83,
-  P_skills≈0. Canonical α=1.0 (marginal −0.495) is not the optimum — α=0.5
-  (marginal −0.258) is higher.
-- Where the GRAPHIFY × LLM complementarity hypothesis FAILS: degenerate
-  graphs where modularity itself is ill-defined; small modules where Louvain's
-  resolution limit dominates; refactors whose value is purely stylistic.
-- **Cites:** `liu2023chatgpt`, plus our own Phase-4 RC findings and ablation
-  numbers (internal, not in `references.bib`).
+The headline result is that PPO+GAE trains cleanly on **all five** sealed seeds
+against the real 1,190-node PythonClaw graph, with a near-neutral mean reward of
+**−0.027 ± 0.022** (n=5) after the RC-4 fix — a break-even policy at the 256-step
+smoke budget, not a broken one. Reaching it was itself a lesson in where
+deterministic graph priors and probabilistic tooling collide: profiling the
+seed-123 wedge traced a multi-minute stall to `networkx`'s Louvain community
+detection collapsing on degenerate mid-rollout topologies. A first-attempt
+daemon-thread watchdog leaked GIL-contending threads; only RC-4's `signal.SIGALRM`
+hard cut, which raises in the calling thread, closed the wedge for seeds 123 and
+314. The lesson generalises: a metric the LLM axis treats as a cheap oracle is a
+CPU cliff on adversarial inputs, and GRAPHIFY's determinism makes such failures
+reproducible and bounded.
+
+The 81-cell reward-coefficient ablation (405/405 runs, all n_ok=5/5) anchors the
+claim quantitatively. The baseline (α=1, β=1, γ=0.5, P=−5) scores −0.461; the best
+cell (α=0.5, β=1, γ=1, P=−1) reaches +0.098, and only 6 of 81 cells are
+net-positive — all at α=0.5, γ=1 — while the worst (α=2, β=2, γ=0, P=−10) collapses
+to −1.158. A Sobol-lite decomposition ranks the modularity weight α (2.03) far
+above β (0.92), γ (0.83) and P_skills (≈0), so the sealed default α=1.0 (marginal
+−0.495) is demonstrably *not* the optimum — α=0.5 (marginal −0.258) is higher. That
+the reward surface is this sensitive to one hand-set coefficient is the strongest
+argument for the hybrid future of §5: the graph fixes which moves are legal, but
+*valuing* those moves is exactly where a learned or LLM-proposed signal belongs.
+The complementarity hypothesis is not unconditional — it fails on degenerate graphs
+where modularity itself is ill-defined, on small modules where Louvain's resolution
+limit dominates the partition, and on refactors whose value is purely stylistic and
+a structural reward cannot score [liu2023chatgpt].
 
 ### Limitations
 
@@ -287,61 +293,44 @@ tighter than the earlier n=3 (dof = 2, t ≈ 4.30), but the 256-step budget keep
 the estimates directional, not convergence-scale, as flagged in
 `docs/ANALYSIS.md` §6.
 
-## §5 Conclusion (~150 words)
+## §5 Conclusion
 
-- Restate the complementarity thesis with the empirical anchor from §4.
-- Future work pointing to LLM-agent integration at the A_max boundary:
-  a hybrid loop where the LLM proposes candidate (action, justification)
-  pairs and the PPO policy is constrained by the deterministic priors of the
-  current graph state.
-- One honest sentence on what would invalidate the thesis (e.g. if a pure
-  LLM-only baseline matches PPO+GAE on the same skills-graph dataset).
+GRAPHIFY and AI agents are complementary, not competing, layers of a refactoring
+system: the deterministic graph fixes *what is legal and measurable* — the
+adjacency structure, the action mask, and the modularity / cohesion / coupling
+signal — while a learned policy, and prospectively an LLM, supplies *what is worth
+doing*. The empirical anchor is honest about that boundary. At a 256-step smoke
+budget the PPO policy holds the real PythonClaw architecture roughly steady
+(−0.027 ± 0.022 over five seeds), and even the best ablation coefficients only
+reach break-even — improvement here is bounded by compute, not by the design. The
+natural next step is a hybrid loop at the A_max action boundary, where an LLM
+proposes candidate (action, justification) pairs that the PPO policy accepts or
+rejects under the graph's deterministic priors [chen2021codex]. The thesis would be
+falsified if a pure LLM-only baseline matched PPO+GAE on the same skills-graph
+dataset — the decisive experiment we leave to future work.
 
-## Diagrams (referenced from §1 and §3)
+## Diagrams
 
-- **D1:** Architecture diagram — skills graph → state → action mask → PPO
-  policy → reward. Render under `docs/diagrams/` (Phase 4, after retrain).
-- **D2:** Learning curves and/or ablation summary chart. Render from
-  `results/training/` (Phase 4 deliverable).
+**D1 — the closed refactor loop:** skills graph → state (A, X) → action mask →
+PPO policy → reward → updated graph. **D2 — per-knob ablation summary:** marginal
+mean reward for α, β, γ and P_skills across the 81-cell grid.
 
 ![D1: Architecture closed loop](../results/figures/essay_d1_architecture.png)
 
 ![D2: Per-knob ablation summary](../results/figures/essay_d2_ablation_summary.png)
 
-## Word count budget
+## References
 
-- **Target:** 2800 words (range 2500–3000).
-- **Citations:** target 11 (range 8–12). Current slate = 11 entries in
-  `docs/references.bib`.
+Eleven sources; full BibTeX in [`docs/references.bib`](references.bib).
 
-## Brief §2.4 prompt-to-section mapping
-
-| Brief §2.4 prompt | Primary section | Secondary sections |
-|---|---|---|
-| 1. GRAPHIFY × AI-agents complementarity | §1 Introduction | §3 Methodology, §5 Conclusion |
-| 2. AI automating static analysis | §2 Static analysis landscape | §3 Methodology, §4 Empirical lessons |
-| 3. Limitations | §4 Empirical lessons + limitations | §5 Conclusion |
-
-## TODO_ARCHITECT before AI drafts paragraphs
-
-- [x] Thesis statement signed off (Option A COMPLEMENTARITY locked above).
-- [x] Diagram concepts approved — D1 architecture + D2 ablation summary both rendered and embedded.
-- [x] Cite slate approved — 11 cites in band [8, 12], mirrored from `docs/references.bib`.
-- [x] §3 keeps the generic "deterministic graph-priors" framing alongside the GRAPHIFY name.
-- [ ] Confirm whether to include a static-analysis canonical reference
-      (e.g. Aho/Sethi/Ullman dragon-book chapter) — currently OMITTED to
-      hold the cite count at exactly 11; can add as 12th if architect wants.
-
-## Cite slate (short-handles, mirrored from `docs/references.bib`)
-
-1. `schulman2017ppo` — PPO algorithm (REQUIRED)
-2. `schulman2016gae` — GAE (REQUIRED)
-3. `huang2022masking` — invalid action masking (REQUIRED)
-4. `newman2004community` — community structure (REQUIRED)
-5. `blondel2008louvain` — Louvain fast unfolding (REQUIRED)
-6. `chen2021codex` — Codex / LLMs for code (LLM AXIS)
-7. `jimenez2024swebench` — SWE-bench (LLM AXIS)
-8. `liu2023chatgpt` — ChatGPT code correctness (LLM AXIS)
-9. `tichy1985rcs` — RCS / refactoring lineage (CONTEXTUAL)
-10. `fowler1999refactoring` — refactoring canonical text (CONTEXTUAL)
-11. `allamanis2018graphs` — programs-as-graphs (CONTEXTUAL)
+1. Schulman et al. 2017 — PPO (arXiv:1707.06347).
+2. Schulman et al. 2016 — GAE (arXiv:1506.02438).
+3. Huang & Ontañón 2022 — invalid action masking.
+4. Newman & Girvan 2004 — community structure.
+5. Blondel et al. 2008 — Louvain fast unfolding.
+6. Chen et al. 2021 — Codex / LLMs for code.
+7. Jimenez et al. 2024 — SWE-bench.
+8. Liu et al. 2023 — ChatGPT code correctness.
+9. Tichy 1985 — RCS / version control.
+10. Fowler 1999 — *Refactoring* (canonical text).
+11. Allamanis et al. 2018 — programs as graphs.

@@ -1,10 +1,21 @@
 # ADR-007: Treat α/β/γ + P_skills Reward Upgrade as MUST (not SHOULD)
 
-- **Status:** Accepted
+- **Status:** Accepted (ablation-grid section superseded 2026-06-08 — see note below)
 - **Date:** 2026-06-04
 - **Deciders:** Architect (human), implementer (AI)
 - **Supersedes:** —
 - **Related:** ADR-001 (PythonClaw shim), ADR-003 (cost metric), OQ-6
+
+> **As-shipped note (2026-06-08).** The reward *equation* below is canonical and
+> unchanged. The **ablation-grid** subsections that follow ("3 × 3 × 3 × 2 = 54
+> cells × 5 = 270 runs" + scout-then-final top-3 plan + `results/ablation/scout|final/`
+> paths) are **superseded**: the implemented grid (`config/config.yaml`
+> `ablation.grids.compact`) uses **3 P_skills levels [−10, −5, −1] → 81 cells
+> (3×3×3×3) × 5 seeds = 405 runs**, all run to completion (no scout/final split).
+> Results live at `results/ablations/cell_<sha>/done.json` → aggregated in
+> `results/data/ablation_stats.json` (`num_cells=81`); full analysis in
+> `docs/ANALYSIS.md`. ANALYSIS/EXPERIMENTS/README all describe the 81-cell grid;
+> treat the 54-cell text below as the original plan only.
 
 ## Contract Authority
 

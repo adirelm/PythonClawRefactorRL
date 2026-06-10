@@ -13,9 +13,15 @@ from pathlib import Path
 
 import networkx as nx
 
+from src.cost.meter import TripleCounter
 from src.graphify.local_impl import LocalGraphify
 
 _DEFAULT_SOURCE = Path("src/pythonclaw_shim/sample_skills")
+_LAYER_HINTS = (
+    ("metadata (L1)", "metadata"),
+    ("instructions (L2)", "instructions"),
+    ("resources (L3)", "resources"),
+)
 
 
 class RefactorSDK:
@@ -32,6 +38,29 @@ class RefactorSDK:
         """
         src_root = Path(source) if source is not None else _DEFAULT_SOURCE
         return LocalGraphify().build(src_root=src_root, seed=42)
+
+    def skills_token_volume(self, source: Path | str | None = None) -> dict:
+        """Per-layer tiktoken (``cl100k_base``) token volume of the Skills corpus.
+
+        Business logic for the CLI ``cost`` surface so the CLI imports only the
+        SDK (CLAUDE.md §3), never ``src.cost`` directly. Returns
+        ``{"total": int, "by_layer": {L1/L2/L3: int}, "lazy_load_saving": float}``.
+        """
+        src_root = Path(source) if source is not None else _DEFAULT_SOURCE
+        counter = TripleCounter()
+        by_layer = {key: 0 for key, _ in _LAYER_HINTS}
+        total = 0
+        for path in sorted(src_root.glob("*.json")):
+            tokens = counter.count(path.read_text(encoding="utf-8")).tokens
+            total += tokens
+            for key, hint in _LAYER_HINTS:
+                if hint in path.name:
+                    by_layer[key] += tokens
+        return {
+            "total": total,
+            "by_layer": by_layer,
+            "lazy_load_saving": total / max(by_layer["metadata (L1)"], 1),
+        }
 
     def train(self, seed: int) -> object:
         """Run a single PPO+GAE training session at the given seed."""

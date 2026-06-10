@@ -287,9 +287,12 @@ Each `F#` is traceable to a brief §-id. The trace matrix
 
 ### 3.5 Ablation matrix (brief §2.2 "highly recommended" upgrade)
 
-- **F11 (Ablation matrix, locked decision)**. Sweep per ADR-007:
-  α ∈ {0.0, 1.0, 2.0}, β ∈ {0.0, 1.0, 2.0}, γ ∈ {0.0, 0.5, 1.0},
-  and `P_skills` ∈ {0.0, -5.0} → 54 cells (the ADR-007 verbatim grid).
+- **F11 (Ablation matrix, locked decision)**. Sweep per ADR-007. **As shipped**
+  the grid is α ∈ {0.5, 1.0, 2.0}, β ∈ {0.5, 1.0, 2.0}, γ ∈ {0.0, 0.5, 1.0},
+  `P_skills` ∈ {−10, −5, −1} → **81 cells × 5 seeds = 405 runs** (no scout/final
+  split; all cells n_ok=5/5). The original 54-cell (3×3×3×2) scout-then-final plan
+  in this section + ADR-007 is **superseded** — see the ADR-007 as-shipped note,
+  `config/config.yaml` `ablation.grids.compact`, and `docs/ANALYSIS.md`.
   These are the **ablation grid values**, not the floor / ceiling of
   the parameter space — the parameter space proper is α, β ≥ 0.0 and
   γ ∈ [0.0, 1.0] (ADR-007). The matrix lives in `docs/ABLATION.md`

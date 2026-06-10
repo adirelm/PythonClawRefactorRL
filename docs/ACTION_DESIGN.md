@@ -118,8 +118,10 @@ Stale formulations explicitly forbidden (per ADR-007): `ΔReuse`,
 `ΔQ_struct`, `ΔQ_runtime`, positive `skills_bonus`, `+P_skills`,
 `λ · skills_bonus`. Any of these is a Phase-0 contract violation.
 
-Weights `(α, β, γ, P_skills)` are MUST-ablated per ADR-007's 3×3×3×2
-grid (54 cells × ≥5 seeds in fine pass).
+Weights `(α, β, γ, P_skills)` are MUST-ablated per ADR-007. **As shipped, the
+grid is 3×3×3×3 = 81 cells × 5 seeds = 405 runs** (3 P_skills levels [−10, −5, −1],
+no scout/final split — see the ADR-007 as-shipped note + `docs/ANALYSIS.md`); the
+original 54-cell plan is superseded.
 
 **Reward shaping discipline (Ng, Harada & Russell, 1999 —
 "Policy Invariance Under Reward Transformations: Theory and Application

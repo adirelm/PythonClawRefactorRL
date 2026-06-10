@@ -36,7 +36,7 @@ _FALLBACK_COLOR = "#999999"
 _LOC_BASE_SIZE = 80
 _LOC_SCALE = 8
 _LOC_CAP = 500
-_TITLE = "PythonClaw Skills shim — initial dependency graph (BEFORE refactor)"
+_TITLE = "PythonClaw — real package dependency graph (BEFORE refactor; 1,190 nodes)"
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:

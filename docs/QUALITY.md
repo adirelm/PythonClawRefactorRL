@@ -128,7 +128,7 @@
 | Code quality | All gates green; 94% coverage; every `.py` ≤150 LOC; ruff clean |
 | RL implementation (PPO+GAE) | Canonical ε=0.2 / λ=0.95 math; **5/5 seeds** complete (RC-4) |
 | Environment + reward | Canonical reward; ablation 81 cells × **5 seeds** (405/405 ok) |
-| Essay + cost analysis | 2990-word essay (11 cites, D1+D2); cost §0 answers Skills-token + PPO-runtime |
+| Essay + cost analysis | ≈3,000-word essay (11 cites, D1+D2); cost §0 answers Skills-token + PPO-runtime |
 | Architecture + docs | 11 ADRs; TRACE.md; 2 Skills-module architectural bugs (brief §3) |
 
 **Honest bounds (see PRD §6.2 L1–L7):** PythonClaw URL pending (shim analysed),

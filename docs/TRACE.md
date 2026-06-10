@@ -95,7 +95,7 @@ implements its semantics.
 | §2.3 — **F14** encoder | State encoder over (A, X, edge_attrs) — GraphSAGE primary (variable-\|V\| via PyG DataLoader) with MLP V_max=512 padding **FALLBACK only** gated by ADR-004 + ADR-008. | `src/model/encoder.py` | `tests/unit/model/test_encoder.py` | `docs/adr/ADR-004-graphsage-vs-mlp-encoder.md`, `docs/adr/ADR-008-sb3-variable-v-buffer.md` | `71f0213` | ✅ done |
 | §2.3 — convergence | Dual criterion: non-overlapping rolling-100 ±2% AND \|dH/dt\| < entropy_slope_threshold (per ADR-010). | `src/services/convergence.py` | `tests/architecture/test_convergence_definition.py` | `docs/adr/ADR-010-dual-convergence-criterion.md` | `1f18844` | ✅ done |
 | §2.3 — encoder | MLP encoder with V_max=512 padding (ADR-004+ADR-008 fallback path active; GraphSAGE primary deferred per ADR-004 spike outcome). | `src/model/encoder.py` | `tests/unit/model/test_encoder.py` | `docs/adr/ADR-004-graphsage-vs-mlp-encoder.md`, `docs/adr/ADR-008-sb3-variable-v-buffer.md` | `71f0213` | ✅ done (MLP fallback active; GraphSAGE gated by ADR-004) |
-| §2.4 — essay | 2500–3000 word essay on **GRAPHIFY × AI agents** — feedback loop, failure modes, governance; 11 sections, 11 citations, 2 diagrams (D1 architecture + D2 ablation). | n/a (prose deliverable) | `tests/architecture/test_essay_shape.py` | `docs/ESSAY.md` (2994 words), `results/figures/essay_d1_architecture.png`, `results/figures/essay_d2_ablation_summary.png` | `c3c0bd7` | ✅ done |
+| §2.4 — essay | 2500–3000 word essay on **GRAPHIFY × AI agents** — feedback loop, failure modes, governance; 8 sections, 11 citations, 2 diagrams (D1 architecture + D2 ablation). | n/a (prose deliverable) | `tests/architecture/test_essay_shape.py` | `docs/ESSAY.md` (≈3,000 words), `results/figures/essay_d1_architecture.png`, `results/figures/essay_d2_ablation_summary.png` | `c3c0bd7` | ✅ done |
 | §2.4 — cost analysis | Cost envelope documented in `docs/COST_ANALYSIS.md` (tiktoken cl100k_base headline + chars/bytes appendix). | n/a (prose + table deliverable) | `tests/cost/test_compute_cost.py` | `docs/COST_ANALYSIS.md` | `49663a6` | ✅ done |
 
 ---
@@ -219,7 +219,7 @@ that Phase 1–4 will create. Listed for grader transparency.
 - `docs/ANALYSIS.md` — D7. ✅ landed (`docs/ANALYSIS.md`).
 - `docs/COST_ANALYSIS.md` — D8. ✅ landed (`docs/COST_ANALYSIS.md`).
 - `docs/BUG_REPORT.md` — Phase 4 deliverable. ✅ landed (`docs/BUG_REPORT.md`, 4 bugs).
-- §2.4 GRAPHIFY × AI agents essay — ✅ landed at `docs/ESSAY.md` (2,994 words). The essay's two figures are `results/figures/essay_d1_architecture.png` (D1 architecture) + `results/figures/essay_d2_ablation_summary.png` (D2 ablation). The originally-planned `docs/essay/graphify_x_ai.md` filename and `docs/diagrams/aka_*.png` were **superseded** by `docs/ESSAY.md` + the `essay_d{1,2}_*.png` figures; not created under the old names.
+- §2.4 GRAPHIFY × AI agents essay — ✅ landed at `docs/ESSAY.md` (≈3,000 words). The essay's two figures are `results/figures/essay_d1_architecture.png` (D1 architecture) + `results/figures/essay_d2_ablation_summary.png` (D2 ablation). The originally-planned `docs/essay/graphify_x_ai.md` filename and `docs/diagrams/aka_*.png` were **superseded** by `docs/ESSAY.md` + the `essay_d{1,2}_*.png` figures; not created under the old names.
 - `docs/diagrams/solid_dep_graph.png` — ✅ landed (Phase 1).
 - `docs/diagrams/env_state_diagram.png` — **not created**; state design documented in prose at `docs/STATE_DESIGN.md`.
 - `docs/shared/PROMPTS.md` — ✅ landed (Phase 4 freeze).

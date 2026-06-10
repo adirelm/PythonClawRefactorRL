@@ -4,7 +4,7 @@
 
 Replays each trained policy (``results/training/seed_*/checkpoint.pt``) on the
 PythonClaw source graph, records modularity / cohesion / coupling at every step
-(``src.services.metric_trace``), aggregates mean ± 95% CI across seeds, writes
+(``src.services._metric_trace``), aggregates mean ± 95% CI across seeds, writes
 ``results/data/metric_curves.csv`` and a 3-panel figure
 ``results/figures/metric_improvement_curves.png`` (modularity ↑, cohesion ↑,
 coupling ↓ = the architecture getting better under the trained policy).
