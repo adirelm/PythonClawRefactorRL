@@ -17,7 +17,7 @@
 | Sub-characteristic | Target | Evidence |
 |---|---|---|
 | Functional completeness | All brief §2.1–§2.4 requirements implemented | `docs/TRACE.md` ✅/🟡 rows; CI gate |
-| Functional correctness | Architecture tests pin exact behaviour (reward formula, clip_eps=0.2, gae_lambda=0.95, Gymnasium ban) | `tests/architecture/` (14 tests) |
+| Functional correctness | Architecture tests pin exact behaviour (reward formula, clip_eps=0.2, gae_lambda=0.95, Gymnasium ban) | `tests/architecture/` (17 files, 78 tests) |
 | Functional appropriateness | GRAPHIFY adapter, PPO+GAE, reward ablation, essay all address brief goals | `docs/PRD.md §5` acceptance criteria |
 
 **Status:** Phase-3 training achieves **5/5 seeds** at 256 steps (smoke scale) after the RC-4 fix (SIGALRM Louvain cut + stored-mask Trajectory). The ablation runs all 5 sealed seeds across 81 compact-grid cells (ADR-006 ≥5-seed floor met).
@@ -68,7 +68,7 @@
 
 | Sub-characteristic | Target | Evidence |
 |---|---|---|
-| Maturity | 338 tests; 94% statement+branch coverage | `uv run pytest --cov=src` |
+| Maturity | 352 tests (1 skipped); 94% statement+branch coverage | `uv run pytest --cov=src` |
 | Fault tolerance | Louvain watchdog + greedy fallback → reward never blocks (Q=0.0 safe default) | `src/services/metrics/modularity.py` `safe_louvain` |
 | Recoverability | Deterministic seeding (`torch`, `numpy`, `random`, `PYTHONHASHSEED`) | `src/utils/seeding.py` |
 | Convergence definition | Dual criterion: rolling-100 ±2% AND entropy slope < threshold; both required | `docs/adr/ADR-010-dual-convergence-criterion.md`; `tests/architecture/test_convergence_definition.py` |
