@@ -49,7 +49,7 @@ uv run python scripts/render_learning_curve.py             # D6 reward curve
 | §2.2 | Degree centrality per step; **betweenness exactly 2×/seed** | `src/services/centrality.py` |
 | §2.3 | PPO (ε=0.2) + GAE (λ=0.95), γ=0.99 | `src/services/ppo_trainer.py`, `src/services/gae_buffer.py` |
 | §2.4 | Cost analysis (Skills-token volume + PPO runtime) | [`docs/COST_ANALYSIS.md`](docs/COST_ANALYSIS.md) |
-| §2.4 | **GRAPHIFY × AI agents** essay (2,990 words, 11 cites, 2 diagrams) | [`docs/ESSAY.md`](docs/ESSAY.md) |
+| §2.4 | **GRAPHIFY × AI agents** essay (2,994 words, 11 cites, 2 diagrams) | [`docs/ESSAY.md`](docs/ESSAY.md) |
 | math | PPO/GAE/reward equations + cross-refs | [`docs/THEORY.md`](docs/THEORY.md) |
 
 No `gymnasium` import exists anywhere under `src/env/` — enforced by an
@@ -81,8 +81,8 @@ What the reverse-engineered graph tells us about the **real PythonClaw**
 architecture (full analysis: [`docs/BUG_REPORT.md`](docs/BUG_REPORT.md),
 `results/data/real_pythonclaw_analysis.json`):
 
-- **God Object / bottleneck: `core/agent.py`.** **974 LOC** (6.5× the 150-line
-  limit), the largest module; `Agent.__init__` has **fan-out 27** (wires 27
+- **God Object / bottleneck: `core/agent.py`.** **974 code-LOC** (1,151 raw lines;
+  6.5× the 150-line code limit), the largest module; `Agent.__init__` has **fan-out 27** (wires 27
   collaborators), `chat_stream`/`chat` fan-out 25/22. Both high afferent (5) and
   efferent (7) coupling — the blob the whole platform hinges on.
 - **Coupling hotspot: `core/llm/base.py`.** **Fan-in 13** — the most-depended
@@ -247,7 +247,7 @@ above are the credibility signal.
 - [`docs/ANALYSIS.md`](docs/ANALYSIS.md) · [`docs/EXPERIMENTS.md`](docs/EXPERIMENTS.md) — results
 - [`docs/COST_ANALYSIS.md`](docs/COST_ANALYSIS.md) — cost & resources
 - [`docs/BUG_REPORT.md`](docs/BUG_REPORT.md) · [`docs/SKILLS_ARCHITECTURE.md`](docs/SKILLS_ARCHITECTURE.md)
-- [`docs/QUALITY.md`](docs/QUALITY.md) — quality self-audit · [`docs/adr/`](docs/adr/) — 11 ADRs
+- [`docs/QUALITY.md`](docs/QUALITY.md) — quality self-audit · [`docs/adr/`](docs/adr/) — 11 ADRs + 1 amendment (12 files)
 
 ## Architecture
 
