@@ -7,10 +7,10 @@
 >
 > **Verification provenance.** GRAPHIFY reverse-engineering flagged the hub
 > modules; a **30-agent hunt** (24 area×category hunters → 50 real candidates →
-> 6 adversarial verifiers) then separated genuine defects from smells. The five
-> security bugs below were each returned **CONFIRMED_REAL_BUG**; an earlier
-> 20-agent pass confirmed Bug 1 (10/10) and labelled the God Object a *smell*
-> (6/6). All findings are **structural/security defects** (we do not execute
+> 6 adversarial verifiers) then separated genuine defects from smells. The **four**
+> security bugs (1–4) below were each returned **CONFIRMED_REAL_BUG** (the God
+> Object `(S)` is a *smell*, not counted as a bug); an earlier 20-agent pass
+> confirmed Bug 1 (10/10) and labelled the God Object `SMELL_ONLY` (6/6). All findings are **structural/security defects** (we do not execute
 > PythonClaw). Every file:line is against the pinned source.
 
 ## Severity summary
@@ -96,9 +96,14 @@ A malicious/compromised marketplace skill with a member like
 `../../../../.config/systemd/user/evil.service` (or a cron file, shell rc, etc.)
 **escapes `skill_dir` and writes anywhere the user can write** → persistence /
 RCE. The only filter is a `__MACOSX`/dot-prefix skip — not path traversal. There
-is no `os.path.realpath(dest).startswith(realpath(skill_dir))` guard. **Fix:**
-reject any member whose resolved destination is outside `skill_dir` before
-writing. *(Verifier: CONFIRMED CRITICAL.)*
+is no `os.path.realpath(dest).startswith(realpath(skill_dir))` guard. The same
+sink is **duplicated** in `install_skill_async` (`skillhub.py:381-390`), which is
+reachable from the **unauthenticated** `/api/marketplace/install` web route
+(`web/app.py:587`, mounted `:91`) — and the ZIP download disables TLS verification
+(`httpx … verify=False`, `skillhub.py:277,302`), so even a "trusted" CDN response is
+MITM-substitutable. **Fix:** reject any member whose resolved destination is outside
+`skill_dir` before writing (both sync + async paths); restore TLS verification.
+*(Verifier: CONFIRMED CRITICAL.)*
 
 ---
 
@@ -116,9 +121,16 @@ Two LLM-facing primitives skip the sandbox the *write* path enforces:
   (Telegram/Discord/WhatsApp/Web).
 
 Together (and reachable via Bug 1/Bug 2 prompt-injection) these form a full
-read-then-exfiltrate primitive that defeats the file sandbox. **Fix:** route
-`read_file` and `send_file` through `_resolve_in_sandbox` like `write_file`.
-*(2 verifiers: CONFIRMED HIGH.)*
+read-then-exfiltrate primitive that bypasses the sandbox-root check `write_file`
+enforces. **Scope (honest):** the configured sandbox is `set_sandbox([PYTHONCLAW_HOME,
+~])` (`core/agent.py:184`) — the *entire home dir* is already in-bounds by design,
+so the crown-jewel files (`~/.ssh`, dotfiles, `~/.pythonclaw` secrets) are reachable
+even *with* the sandbox. The missing `read_file`/`send_file` check therefore adds
+arbitrary read/exfil of paths **outside `$HOME`** (`/etc/passwd`, other users' files)
+on top of that, and removes the write/read asymmetry — a genuine defect, scoped
+accurately rather than as "reads everything." **Fix:** route `read_file` and
+`send_file` through `_resolve_in_sandbox` like `write_file` (and tighten the sandbox
+roots below `~`). *(2 verifiers: CONFIRMED — real defect, impact scoped to extra-`$HOME` reads.)*
 
 ---
 
