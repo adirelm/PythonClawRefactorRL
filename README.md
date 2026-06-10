@@ -11,7 +11,7 @@ hard lazy-load-break penalty.
 
 > **Status: complete (Phases 0–4).** Custom non-Gymnasium environment, PPO+GAE
 > trainer, 5-seed training, 81-cell × 5-seed ablation, cost analysis, and the
-> §2.4 essay all landed. Quality gates green: ruff clean · 343 tests · 94%
+> §2.4 essay all landed. Quality gates green: ruff clean · 352 tests · 94%
 > coverage · every `.py` ≤150 LOC.
 
 This README **is the submission report** (brief §3). Sections
@@ -26,7 +26,7 @@ are the graded deliverables; deeper detail lives in the linked docs.
 uv sync --dev
 
 # Quality gates
-uv run pytest tests/ --cov=src --cov-report=term-missing   # 346 pass, 1 skip, 94% cov
+uv run pytest tests/ --cov=src --cov-report=term-missing   # 352 pass, 1 skip, 94% cov
 uv run ruff check src/ tests/ scripts/                     # 0 violations
 uv run python scripts/check_file_sizes.py                  # all .py ≤150 LOC
 
