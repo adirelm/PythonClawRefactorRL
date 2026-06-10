@@ -172,7 +172,7 @@ metrics**. Replaying the trained policy on the real 1,190-node graph and
 snapshotting modularity / cohesion / coupling at every rollout step
 (`src/services/_metric_trace.py` → `scripts/render_metric_curves.py` →
 `results/data/metric_curves.csv`, mean ± 95% CI over 5 seeds): at the 256-step
-smoke budget all three are **essentially flat** — modularity 0.585 → 0.576,
+smoke budget all three are **essentially flat** — modularity 0.586 → 0.572,
 cohesion ≈ 0.057, coupling ≈ 0.32 — i.e. the default-config policy holds the
 architecture steady rather than improving it, matching the −0.027 reward.
 
