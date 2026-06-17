@@ -34,7 +34,6 @@ if str(REPO_ROOT) not in sys.path:
 from src.env.skills_graph_env import SkillsGraphEnv  # noqa: E402
 from src.model.policy_net import PolicyNet  # noqa: E402
 from src.services.ppo_trainer import PPOTrainer  # noqa: E402
-from src.utils.config_loader import load_config  # noqa: E402
 
 DEFAULT_SEEDS = [42, 7, 123, 314, 271]  # CLAUDE.md sealed seed list
 SMOKE_STEPS = 5000
@@ -64,8 +63,9 @@ def _set_global_seeds(seed: int) -> None:
         torch.cuda.manual_seed_all(seed)
 
 
-def _build_components(seed: int, source_dir: Path, cfg: dict, coeffs: dict | None = None) -> tuple:
-    """Construct (env, policy, trainer) wired with canonical PPO constants."""
+def _build_components(seed: int, source_dir: Path, coeffs: dict | None = None) -> tuple:
+    """Construct (env, policy, trainer). PPO hyperparameters come from config.ppo
+    (single source, CLAUDE.md §4) via ``PPOConfig.from_config`` inside the trainer."""
     c = coeffs or {}
     env = SkillsGraphEnv(
         source_dir,
@@ -76,12 +76,7 @@ def _build_components(seed: int, source_dir: Path, cfg: dict, coeffs: dict | Non
         reward_p_skills=c.get("p_skills"),
     )
     policy = PolicyNet()
-    trainer = PPOTrainer(
-        env,
-        policy,
-        clip_eps=float(cfg["ppo"]["clip_eps"]),
-        gae_lambda=float(cfg["ppo"]["gae_lambda"]),
-    )
+    trainer = PPOTrainer(env, policy)
     return env, policy, trainer
 
 
@@ -122,11 +117,11 @@ def _build_payload(history: list, initial_btw: dict, final_btw: dict, btw_calls:
     }
 
 
-def _run_one_seed(seed: int, args: argparse.Namespace, cfg: dict) -> dict:
+def _run_one_seed(seed: int, args: argparse.Namespace) -> dict:
     """Train one seed end-to-end; return its summary row for the aggregate."""
     _set_global_seeds(seed)
     coeffs = {"alpha": args.alpha, "beta": args.beta, "gamma": args.gamma, "p_skills": args.p_skills}
-    env, policy, trainer = _build_components(seed, args.source_dir, cfg, coeffs=coeffs)
+    env, policy, trainer = _build_components(seed, args.source_dir, coeffs=coeffs)
     initial_btw = dict(env._initial_betweenness)  # captured by env.__init__ (CALL 1/2)
     history = trainer.train(args.total_steps)
     rewards = _evaluation_rewards(trainer)
@@ -163,9 +158,8 @@ def _aggregate(per_seed: list[dict], output_dir: Path, total_steps: int) -> dict
 def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     args = _parse_args(argv)
-    cfg = load_config()
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    per_seed = [_run_one_seed(seed, args, cfg) for seed in args.seeds]
+    per_seed = [_run_one_seed(seed, args) for seed in args.seeds]
     aggregate = _aggregate(per_seed, args.output_dir, args.total_steps)
     print(f"seeds={aggregate['seeds']}")
     print(f"mean_final_reward={aggregate['mean_final_reward']:.6f}")

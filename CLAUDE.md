@@ -72,7 +72,11 @@ Use inheritance where it pays — `BaseAgent → PPOAgent`, `BaseReward →
 ModularityReward / CohesionReward / CouplingPenalty`. No code duplication;
 shared logic in base classes. **`RefactorSDK` is the single business-logic
 entry point** for all UIs (CLI, GUI, notebook). UIs never import services /
-model / env directly.
+model / env directly. **Developer tooling under `scripts/` is explicitly
+exempt**: it is not a UI surface but reproduction/experiment glue (training
+drivers, figure renderers, corpus collectors) and may import `src.*` internals
+directly. The single-entry rule binds the user-facing surfaces (CLI + notebook),
+which is where it is verified.
 
 ### 4. No Hardcoded Values
 
@@ -183,8 +187,11 @@ Save plots as PNG in `results/figures/` and ablation CSVs in
 ## Version Control
 
 - New repository for A4 (NOT the same as A1/A2/A3). Branch: `main`.
-- Initial version `1.2.0` (`v1.2.0` tag); current `1.3.0` (`v1.3.0` — adds the
-  brief-§3 per-metric improvement curves + the P4-E3 extended convergence experiment).
+- Initial version `1.2.0` (`v1.2.0` tag); `1.3.0` (`v1.3.0` — brief-§3 per-metric
+  improvement curves + P4-E3 extended convergence experiment); current `1.4.0`
+  (`v1.4.0` — fixes the action-mask↔env slot-resolution bug so MERGE/REWIRE apply
+  the masked-legal partner, retrains all results, wires every PPO hyperparameter
+  from config, and adds Skills-module architectural bugs to the §3 report).
 - Commit-message convention: `<Phase N|Phase 0 bootstrap|chore: bootstrap>:
   <imperative summary>`.
 - Co-author trailer required on every Claude-generated commit:

@@ -14,6 +14,13 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class ConvergenceVerdict:
+    """Per-seed convergence outcome (ADR-010 dual criterion).
+
+    ``converged`` is the AND of the reward-stability and entropy-slope tests;
+    ``reward_delta`` / ``entropy_slope`` carry the measured values; ``partial``
+    flags a PARTIAL_CONVERGENCE (one criterion met); ``reason`` is a human note.
+    """
+
     converged: bool
     reward_delta: float
     entropy_slope: float

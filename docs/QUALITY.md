@@ -57,7 +57,7 @@
 | Sub-characteristic | Target | Evidence |
 |---|---|---|
 | Learnability | `README.md` quick-start (4 commands) + `docs/PLAN.md` C4 diagram | `README.md` |
-| Operability | `uv run main.py` boots CLI menu; `uv run pytest` runs all gates | `main.py`; `docs/UX.md` |
+| Operability | `uv run python -m src.cli <graph\|cost\|info>` drives the CLI; `uv run pytest` runs all gates | `src/cli/__main__.py`; `docs/UX.md` |
 | User error protection | Action masking prevents illegal moves (Huang & Ontañón 2022) | `src/env/action_mask.py` |
 
 ---
@@ -68,9 +68,9 @@
 
 | Sub-characteristic | Target | Evidence |
 |---|---|---|
-| Maturity | 352 tests (1 skipped); 94% statement+branch coverage | `uv run pytest --cov=src` |
+| Maturity | 356 tests collected (355 pass, 1 skipped); 94% statement+branch coverage | `uv run pytest --cov=src` |
 | Fault tolerance | Louvain watchdog + greedy fallback → reward never blocks (Q=0.0 safe default) | `src/services/metrics/modularity.py` `safe_louvain` |
-| Recoverability | Deterministic seeding (`torch`, `numpy`, `random`, `PYTHONHASHSEED`) | `src/utils/seeding.py` |
+| Recoverability | Per-run deterministic seeding of `random`/`numpy`/`torch` over the sealed seed list [42,7,123,314,271] | `scripts/train_ppo.py` `_set_global_seeds`; `config/config.yaml#seeds` |
 | Convergence definition | Dual criterion: rolling-100 ±2% AND entropy slope < threshold; both required | `docs/adr/ADR-010-dual-convergence-criterion.md`; `tests/architecture/test_convergence_definition.py` |
 
 ---
@@ -94,7 +94,7 @@
 
 | Sub-characteristic | Target | Evidence |
 |---|---|---|
-| Modularity | Every `.py` ≤150 LOC; 48 modules with single responsibilities | `scripts/check_file_sizes.py`; CI gate |
+| Modularity | Every `.py` ≤150 LOC; 46 source modules (33 non-`__init__`) with single responsibilities | `scripts/check_file_sizes.py`; CI gate |
 | Reusability | `RefactorSDK` single entry point; services composable via config | `src/sdk/`; `config/config.yaml` |
 | Analysability | Zero ruff violations; 11 ADRs recording every architectural decision | `uv run ruff check` → 0 violations |
 | Modifiability | All algorithm params in `config/config.yaml`; no hardcoded RL values in `src/` | `tests/architecture/test_config_refs.py` |

@@ -14,12 +14,14 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import subprocess
 import sys
 from pathlib import Path
 
 import pytest
 
-_SCRIPT_PATH = Path(__file__).resolve().parents[2] / "scripts" / "collect_phase_corpora.py"
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_SCRIPT_PATH = _REPO_ROOT / "scripts" / "collect_phase_corpora.py"
 _SPEC = importlib.util.spec_from_file_location("collect_phase_corpora", _SCRIPT_PATH)
 assert _SPEC is not None and _SPEC.loader is not None
 collect_mod = importlib.util.module_from_spec(_SPEC)
@@ -27,11 +29,35 @@ sys.modules["collect_phase_corpora"] = collect_mod
 _SPEC.loader.exec_module(collect_mod)
 
 
+def _has_git_history() -> bool:
+    """True iff this checkout is a git repo with at least one commit.
+
+    Guards the history-dependent tests so a vanished ``.git`` (Google Drive
+    sync) or shallow checkout SKIPS rather than fails — the corpus contract is
+    only meaningful when history is present (CI uses fetch-depth: 0).
+    """
+    try:
+        out = subprocess.run(
+            ["git", "rev-list", "--max-parents=0", "HEAD"],
+            cwd=_REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except FileNotFoundError:
+        return False
+    return out.returncode == 0 and bool(out.stdout.strip())
+
+
+_needs_history = pytest.mark.skipif(not _has_git_history(), reason="no git history in this checkout")
+
+
 @pytest.fixture
 def output_dir(tmp_path: Path) -> Path:
     return tmp_path / "cost"
 
 
+@_needs_history
 def test_emits_jsonl_with_required_fields(output_dir: Path) -> None:
     """Every emitted record carries phase + role + text (sealed COST-4 contract)."""
     rc = collect_mod.main(["--output-dir", str(output_dir), "--prompts-md", "/nonexistent"])
@@ -50,23 +76,34 @@ def test_emits_jsonl_with_required_fields(output_dir: Path) -> None:
     assert total > 0, "at least one record should have been emitted"
 
 
+@_needs_history
 def test_phase_boundaries_match_commits(output_dir: Path) -> None:
-    """Anchor commits land in their declared phase (71f0213 -> phase 3)."""
+    """Each phase's marker commit lands in its declared phase file.
+
+    Resolved at RUNTIME from the 'Phase N' commit-subject convention (not
+    pinned SHAs), so the contract survives history rewrites: every phase whose
+    marker appears in history must collect at least one commit whose subject
+    names that phase.
+    """
     rc = collect_mod.main(["--output-dir", str(output_dir), "--prompts-md", "/nonexistent"])
     assert rc == 0
-    anchors = {
-        0: "a213652b4411109244ae139d5e0691deb818d327",  # bootstrap
-        1: "0165fa2925228558fa23e658c72d7da5d1d19dea",  # Phase 1 head
-        2: "ec1288a05e059c6602a3b2fa22834dee8bee9a23",  # Phase 2 head
-        3: "71f0213653fdc5ea56b6eb88062dcac9478851e7",  # Phase 3 head
-    }
-    for phase, sha in anchors.items():
+    for phase in (1, 2, 3):
+        marker = f"phase {phase}"
+        present_in_history = subprocess.run(
+            ["git", "log", "--format=%s", "HEAD"],
+            cwd=_REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.lower()
+        if marker not in present_in_history:
+            continue  # phase not labelled in this history — nothing to assert
         recs = [
             json.loads(ln)
             for ln in (output_dir / f"phase_{phase}.jsonl").read_text(encoding="utf-8").splitlines()
         ]
-        shas = {r["sha"] for r in recs if r["source"] == "git"}
-        assert sha in shas, f"anchor {sha[:7]} missing from phase_{phase}.jsonl"
+        subjects = [r["text"].lower() for r in recs if r["role"] == "commit_subject"]
+        assert any(marker in s for s in subjects), f"no 'Phase {phase}' commit in phase_{phase}.jsonl"
 
 
 def test_handles_missing_prompts_md_gracefully(output_dir: Path) -> None:
@@ -113,8 +150,20 @@ def test_record_as_jsonl_round_trips() -> None:
     assert parsed["sha"] == "ec1288a"
 
 
+@_needs_history
 def test_git_range_override(output_dir: Path) -> None:
-    """--git-range overrides phase-4 range; phase 4 file still emitted."""
+    """--git-range overrides phase-4 range; phase 4 file still emitted.
+
+    The range boundary is resolved at runtime (root commit .. HEAD) rather than
+    a hardcoded SHA, so it survives a rewritten history.
+    """
+    root = subprocess.run(
+        ["git", "rev-list", "--max-parents=0", "HEAD"],
+        cwd=_REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.split()[0]
     rc = collect_mod.main(
         [
             "--output-dir",
@@ -122,7 +171,7 @@ def test_git_range_override(output_dir: Path) -> None:
             "--prompts-md",
             "/nonexistent",
             "--git-range",
-            "dbdd1a5021f2928a03751b8fcb3db62c0623bd26..HEAD",
+            f"{root}..HEAD",
         ]
     )
     assert rc == 0

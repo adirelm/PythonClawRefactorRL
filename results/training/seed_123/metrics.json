@@ -2386,18 +2386,18 @@
   },
   "iterations": [
     {
-      "approx_kl": 0.004199087619781494,
+      "approx_kl": -0.0010141879320144653,
       "clip_fraction": 0.0,
-      "policy_loss": 0.17970426380634308,
+      "policy_loss": -0.14352470636367798,
       "steps": 128,
-      "value_loss": 0.0001748476061038673
+      "value_loss": 5.038608287577517e-05
     },
     {
-      "approx_kl": -8.156895637512207e-05,
+      "approx_kl": 0.003140553832054138,
       "clip_fraction": 0.0,
-      "policy_loss": -0.07528065145015717,
+      "policy_loss": 0.30117475986480713,
       "steps": 256,
-      "value_loss": 0.00010717752593336627
+      "value_loss": 9.899112046696246e-05
     }
   ],
   "num_iterations": 2

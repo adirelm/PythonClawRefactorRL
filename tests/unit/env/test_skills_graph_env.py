@@ -125,9 +125,9 @@ def test_action_mask_has_canonical_shape(tiny_source_tree: Path) -> None:
 
 
 def test_step_produces_nonzero_reward_when_action_changes_graph() -> None:
-    """Phase-3 end-to-end: SPLIT actions mutate the graph (via real refactor
-    ops) → metrics deltas → at least one non-zero reward across a short
-    SPLIT sweep over the sample_skills graph.
+    """Phase-3 end-to-end: SPLIT actions mutate the graph (via the real
+    slot-correct refactor ops) → metrics deltas → at least one non-zero
+    reward across a short SPLIT sweep over the sample_skills graph.
     """
     env = SkillsGraphEnv(SAMPLE_SKILLS_DIR, seed=42)
     n0 = env.graph.number_of_nodes()
@@ -137,7 +137,8 @@ def test_step_produces_nonzero_reward_when_action_changes_graph() -> None:
     for primary in range(8):  # 8 SPLITs over distinct nodes
         _, reward, _, info = env.step(Action(kind=ActionKind.SPLIT, primary=primary, secondary=0))
         rewards.append(reward)
-    assert env.graph.number_of_nodes() > n0, "SPLIT must add shadow nodes"
+    # refactor_ops.split_module replaces a node with _A/_B halves: net +1 node/split.
+    assert env.graph.number_of_nodes() > n0, "SPLIT must decompose nodes (net +1 each)"
     assert any(r != 0.0 for r in rewards), f"expected at least one non-zero reward; got {rewards}"
     assert info["history_len"] == 8, "all 8 SPLIT actions must be recorded in history"
 

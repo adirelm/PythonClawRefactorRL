@@ -21,11 +21,12 @@ the RC-4 fix all ablation cells reach n_ok=5, so no padding or imputation is nee
 AB-EXEC completed at the full ADR-006 floor: **81 cells × 5 seeds (405/405 rows
 status=ok)** after the RC-4 fix. §2–§6 carry real numbers from
 results/data/ablation_stats.json.
-**Main training (5-seed PPO run) completed** with Phase-4 RC-4 (SIGALRM-based Louvain
-watchdog eliminates daemon-thread GIL accumulation). All 5 seeds: {42, 7, 123, 314, 271},
-mean final reward = −0.461 ± 0.186 (n=5, 95% CI ±0.232 at dof=4). Betweenness CI
-chart re-rendered with n=5. Learning curve (D6) generated at
-results/learning_curves/reward_vs_episode.png.
+**Main training (5-seed PPO run) completed** on the corrected slot-resolving env.
+All 5 seeds {42, 7, 123, 314, 271} on the **real** 1,190-node graph: mean final
+reward = −0.020 ± 0.039 (n=5, 95% CI at dof=4; one seed net-positive). The
+controlled-`sample_skills` baseline cell (anchoring the ablation below) is
+−0.462 ± 0.043. Betweenness CI chart re-rendered with n=5 (1,190 nodes); learning
+curve (D6) at results/learning_curves/reward_vs_episode.png.
 
 ## §1 Setup
 - **Grid:** `compact` (81 cells = 3α × 3β × 3γ × 3P_skills) per config.yaml ablation block.
@@ -36,8 +37,8 @@ results/learning_curves/reward_vs_episode.png.
 - **Per-seed wall-clock budget:** 240s (never approached post-RC-4; cells run ~50s for all 5 seeds).
 - **Baseline cell:** (α=1.0, β=1.0, γ=0.5, P_skills=-5.0) — the canonical sealed default.
 - **Reward equation (sealed):** R_t = α·ΔModularity + β·ΔCohesion − γ·Coupling + P_skills
-  with the canonical default coefficients above. See src/env/reward.py L93-115 and ADR-007.
-- **Action space:** A_max=45057 (sealed boundary, see ESSAY §3 + ADR-005a).
+  with the canonical default coefficients above. See src/env/reward.py (`compute_reward`) and ADR-007.
+- **Action space:** A_max=45057 (sealed boundary, see ESSAY §3 + ADR-005).
 - **PPO hyperparameters:** ε=0.2, GAE λ=0.95, γ=0.99 (sealed; identical across all cells).
 
 ### §1.1 Why this grid?
@@ -56,31 +57,31 @@ inside budget; all 405 (cell × seed) rows are `status=ok`.
 Source: `results/data/ablation_stats.json` produced by `scripts/ablation_stats.py`
 from the 406-line `results/ablations/seed_table.csv` (header + 81 cells × 5 seeds).
 
-| metric | baseline (1.0, 1.0, 0.5, -5.0) | best cell (0.5, 1.0, 1.0, -1.0) | worst cell (2.0, 2.0, 0.0, -10.0) |
+| metric | baseline (1.0, 1.0, 0.5, -5.0) | best cell (0.5, 0.5, 1.0, -1.0) | worst cell (2.0, 2.0, 0.0, -10.0) |
 |---|---|---|---|
-| cell_sha | 8b1976b1dd11 | 08f03c0647e6 | c30978b31fc7 |
-| mean_final_reward | -0.461 ± 0.259 | +0.098 ± 0.507 | -1.158 ± 0.418 |
+| cell_sha | 8b1976b1dd11 | 483d2f567a6d | c30978b31fc7 |
+| mean_final_reward | -0.462 ± 0.060 | +0.045 ± 0.098 | -1.241 ± 0.148 |
 | n_ok (out of 5) | 5 | 5 | 5 |
-| Δ vs baseline | 0.000 | +0.559 | -0.697 |
+| Δ vs baseline | 0.000 | +0.506 | -0.779 |
 
 CI95 half-widths use Student-t with dof=4 (n_ok=5 ⇒ t₀.₀₂₅,₄ = 2.776) —
 substantially tighter than the earlier 3-seed run's dof=2 (t = 4.303).
 
 ### §2.1 Interpretation
-The best cell beats the baseline by +0.559 mean reward; its CI95 (±0.507) and the
-baseline's (±0.259) still overlap, so the gap is suggestive, not discriminative —
-but the positive-mean region is now sharply localised: **only 6 of 81 cells have a
-positive mean**, and all six sit at α=0.5, γ=1.0 (two distinct (α,β,γ) corners —
-β∈{0.5,1.0} — each appearing three times because P_skills is inert). The worst
-cell drops 0.697 below the baseline with a tight CI
-(±0.418), clearly a different regime. Reading the Sobol-lite ranking in §5 — α
-dominates (score 2.03), followed by β (0.92) and γ (0.83) — the worst cell's
-collapse is driven primarily by α=2.0 (highest grid value); α alone moves the
-marginal mean from -0.258 (α=0.5) to -0.893 (α=2.0), a Δ of -0.635. The best cell
-mirrors this: α=0.5 is the lowest grid value and its marginal is the most-positive.
-The signal is "α too high crushes reward"; the sealed default α=1.0 (marginal
--0.495) sits between the best (α=0.5) and worst (α=2.0) marginals — a defensible
-mid-grid choice, though α=0.5 yields a higher marginal mean.
+The best cell beats the baseline by +0.506 mean reward, and at n=5 the gap is now
+**discriminative**: the best cell's CI95 (±0.098) and the baseline's (±0.060) do
+**not** overlap. The positive-mean region is sharply localised: **only 3 of 81
+cells have a positive mean**, and all three are the *same* (α, β, γ) corner —
+(0.5, 0.5, 1.0) — appearing three times because P_skills is inert (see §3). The
+worst cell drops 0.779 below the baseline with a tight CI (±0.148), clearly a
+different regime. Reading the Sobol-lite ranking in §5 — α dominates (score 1.91),
+followed by γ (1.10) and β (0.97) — the worst cell's collapse is driven primarily
+by α=2.0 (highest grid value); α alone moves the marginal mean from -0.280 (α=0.5)
+to -0.894 (α=2.0), a Δ of -0.614. The best cell mirrors this: α=0.5 is the lowest
+grid value and its marginal is the most-positive. The signal is "α too high crushes
+reward"; the sealed default α=1.0 (marginal -0.488) sits between the best (α=0.5)
+and worst (α=2.0) marginals — a defensible mid-grid choice, though α=0.5 yields a
+higher marginal mean.
 
 ### §2.2 Cells with n_ok < 5
 None. All 81 cells completed all 5 seeds (405/405 rows `status=ok` in
@@ -99,9 +100,9 @@ the remaining knobs), and the CI95 half-width uses Student-t with dof=26.
 
 | α value | n_cells | mean reward | CI95 lo | CI95 hi |
 |---|---|---|---|---|
-| 0.5 | 27 | -0.258 | -0.340 | -0.176 |
-| 1.0 | 27 | -0.495 | -0.560 | -0.430 |
-| 2.0 | 27 | -0.893 | -0.949 | -0.837 |
+| 0.5 | 27 | -0.280 | -0.363 | -0.197 |
+| 1.0 | 27 | -0.488 | -0.568 | -0.409 |
+| 2.0 | 27 | -0.894 | -0.969 | -0.819 |
 
 Monotone-decreasing in α — clean directional signal. The sealed default α=1.0
 sits between the best (α=0.5) and worst (α=2.0) marginals. All three CI bands
@@ -112,21 +113,21 @@ clearly above the per-marginal noise floor.
 
 | β value | n_cells | mean reward | CI95 lo | CI95 hi |
 |---|---|---|---|---|
-| 0.5 | 27 | -0.430 | -0.547 | -0.313 |
-| 1.0 | 27 | -0.500 | -0.625 | -0.375 |
-| 2.0 | 27 | -0.716 | -0.821 | -0.611 |
+| 0.5 | 27 | -0.419 | -0.543 | -0.295 |
+| 1.0 | 27 | -0.512 | -0.624 | -0.399 |
+| 2.0 | 27 | -0.732 | -0.851 | -0.613 |
 
 Monotone-decreasing; the 0.5/1.0 CIs overlap, so β at this resolution does not
 give a discriminative low-vs-mid response. The β=2.0 band separates cleanly
-from β=0.5. At 5 seeds β edges ahead of γ in the Sobol-lite ranking (§5).
+from β=0.5. At 5 seeds γ edges ahead of β in the Sobol-lite ranking (§5).
 
 **γ (Coupling penalty weight):**
 
 | γ value | n_cells | mean reward | CI95 lo | CI95 hi |
 |---|---|---|---|---|
-| 0.0 | 27 | -0.664 | -0.770 | -0.558 |
-| 0.5 | 27 | -0.578 | -0.691 | -0.465 |
-| 1.0 | 27 | -0.404 | -0.538 | -0.270 |
+| 0.0 | 27 | -0.734 | -0.850 | -0.618 |
+| 0.5 | 27 | -0.548 | -0.659 | -0.438 |
+| 1.0 | 27 | -0.380 | -0.501 | -0.259 |
 
 Monotone-increasing in γ — heavier coupling penalty correlates with higher
 reward, contrary to the naive intuition that "more penalty hurts." Likely the
@@ -137,9 +138,9 @@ incur a larger ΔModularity hit.
 
 | P_skills value | n_cells | mean reward | CI95 lo | CI95 hi |
 |---|---|---|---|---|
-| -10.0 | 27 | -0.549 | -0.675 | -0.423 |
-| -5.0 | 27 | -0.549 | -0.675 | -0.423 |
-| -1.0 | 27 | -0.549 | -0.675 | -0.423 |
+| -10.0 | 27 | -0.554 | -0.684 | -0.424 |
+| -5.0 | 27 | -0.554 | -0.684 | -0.424 |
+| -1.0 | 27 | -0.554 | -0.684 | -0.424 |
 
 The three marginals are identical to 6 decimal places. Spot-checking the raw
 `seed_table.csv` confirms that for every fixed (α, β, γ, seed), `final_reward`
@@ -164,7 +165,7 @@ See `results/figures/ablation_heatmap.png` (produced by Stream B's
 `scripts/render_ablation_heatmap.py` in parallel with this stream). The heatmap
 is a 9×9 grid (α×β on one axis, γ×P_skills on the other), with the baseline
 cell circled and the best/worst cells annotated. Colour scale: diverging
-blue→white→red around the baseline mean (-0.461), so the visual asymmetry of
+blue→white→red around the baseline mean (-0.462), so the visual asymmetry of
 the response surface is legible at a glance — the α=2.0 quadrants are clearly
 the deepest-red region and the α=0.5, γ=1.0 quadrants the brightest blue.
 
@@ -178,22 +179,23 @@ At 5 seeds the final run has zero such cells (all 81 at n_ok=5), so no hatching 
 Per-knob first-order sensitivity: |mean(max-knob cells) − mean(min-knob cells)| / σ(all cells).
 Larger = knob matters more. Formally a Sobol first-order approximation (Sobol 2001);
 we skip the full Saltelli sampling for tractability. σ(all cells) here is the
-population stdev across all 81 cell means (≈0.313).
+population stdev across all 81 cell means (≈0.322).
 
 | knob | range Δ (raw) | normalised by σ_all | rank |
 |---|---|---|---|
-| α | 0.635 | 2.03 | 1 |
-| β | 0.286 | 0.92 | 2 |
-| γ | 0.260 | 0.83 | 3 |
+| α | 0.614 | 1.91 | 1 |
+| γ | 0.354 | 1.10 | 2 |
+| β | 0.313 | 0.97 | 3 |
 | P_skills | 0.000 | 0.00 | 4 |
 
-α dominates by a factor of ~2.2× over the next-most-sensitive knob. At 5 seeds
-β (0.92) edges narrowly ahead of γ (0.83) — a reordering from the earlier 3-seed
-run (which had γ > β); the two are close enough that the swap is within sampling
-noise, so the robust claim is "α dominates; β and γ are comparable second-order
-effects." P_skills is exactly zero because, as §3 documents, the three P_skills
-marginals are identical to 6 decimal places — the penalty never fires inside the
-256-step smoke budget.
+α dominates by a factor of ~1.7× over the next-most-sensitive knob. At 5 seeds
+γ (1.10) edges ahead of β (0.97) — under the corrected slot-resolving env the
+coupling penalty γ has a slightly stronger first-order effect than the cohesion
+weight β; the two are close enough that the order is within sampling noise, so the
+robust claim is "α dominates; β and γ are comparable second-order effects."
+P_skills is exactly zero because, as §3 documents, the three P_skills marginals
+are identical to 6 decimal places — the penalty never fires inside the 256-step
+smoke budget.
 
 ### §5.1 What this is not
 This is NOT a full Sobol decomposition — we do not estimate second-order interaction
@@ -218,8 +220,8 @@ as a coarse ordinal signal, not a precise effect size.
 - **Extended-budget check (P4-E3, refuted).** To test whether the smoke horizon
   is what suppresses improvement, a 4×-budget run (1,024 steps/seed, 5 seeds) was
   trained on the **real** 1,190-node graph with the **best ablation cell's**
-  coefficients (α=0.5, β=1.0, γ=1.0, P_skills=−1.0). It still breaks even: mean
-  reward **−0.055 ± 0.019**, per-metric Δ modularity −0.013 / cohesion −0.003 /
+  coefficients (α=0.5, β=0.5, γ=1.0, P_skills=−1.0). It still breaks even: mean
+  reward **−0.043 ± 0.019**, per-metric Δ modularity −0.013 / cohesion −0.003 /
   coupling −0.002 (`results/data/metric_curves_converged.csv`). So the breakeven
   is **not** merely a 256-step artefact — decisive net-positive refactoring needs
   ≫1k steps and/or a richer reward, not just the best coefficients. This is a
@@ -260,7 +262,7 @@ final reward up to floating-point summation order in the GAE advantage rollup
 (see docs/PPO_GAE_MATH_AUDIT.md §4).
 
 ## §8 Pointers to source
-- Reward equation: src/env/reward.py L93-115 + ADR-007.
+- Reward equation: src/env/reward.py (`compute_reward`) + ADR-007.
 - Ablation runner: scripts/run_ablation.py + scripts/_ablation_lib.py.
 - SDK consumer: src/sdk/ablation.py (Ablation + CellResult + run_ablation).
 - Honesty policy: docs/TODO.md §Known gaps; this analysis stays 🟡 in-progress
@@ -283,7 +285,16 @@ final reward up to floating-point summation order in the GAE advantage rollup
   generates results/data/ablation_stats.json from seed_table.csv. §2, §3, §4
   (heatmap reference), §5 (Sobol-lite), §6 caveats filled.
 - Phase 4 RC-4 (5-seed re-run): after the SIGALRM Louvain fix, the full ablation
-  re-ran at 5 seeds/cell (405/405 rows ok). Updated numbers: best cell
+  re-ran at 5 seeds/cell (405/405 rows ok). Numbers: best cell
   (0.5, 1.0, 1.0, -1.0) mean=+0.098; worst cell (2.0, 2.0, 0.0, -10.0) mean=-1.158;
   baseline mean=-0.461; Sobol-lite ranks α(2.03) > β(0.92) > γ(0.83) > P_skills(0.00).
   CIs tightened from dof=2 (n=3) to dof=4 (n=5).
+- Phase 5 (corrected-env re-run): after the action-resolver fix (env now applies
+  the slot-correct MERGE/REWIRE partner the mask marks legal — see
+  `src/env/action_resolver.py`), the full ablation re-ran (405/405 rows ok).
+  Updated numbers: best cell **(0.5, 0.5, 1.0, -1.0) mean=+0.045 ± 0.098** (β shifted
+  0.5; only 3 of 81 cells now positive, all at α=0.5/β=0.5/γ=1.0); worst cell
+  (2.0, 2.0, 0.0, -10.0) mean=-1.241; baseline mean=-0.462; Sobol-lite reorders to
+  **α(1.91) > γ(1.10) > β(0.97) > P_skills(0.00)** — γ overtakes β under the corrected
+  application. CI95 half-widths tightened markedly (best ±0.098 vs ±0.507) because the
+  corrected env has far lower cross-seed variance.

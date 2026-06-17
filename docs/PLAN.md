@@ -159,7 +159,7 @@ rendering module. Tree shape:
 
 ```yaml
 # config/config.yaml (authoritative — excerpt; see file for full)
-version: "1.3.0"
+version: "1.4.0"
 
 ppo:
   clip_eps: 0.2          # FIXED by ex04 §2.3 — asserted in tests

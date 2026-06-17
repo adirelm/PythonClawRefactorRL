@@ -132,7 +132,7 @@ interval is reported alongside the absolute number.
 
 Reporting layout: `results/ablation/scout/<cell_id>/seed_<n>/` (162
 runs) and `results/ablation/final/<cell_id>/seed_<n>/` (15 runs).
-`docs/ABLATION.md` ships **two** tables — scout-pass survey (all 54
+`docs/ANALYSIS.md` ships **two** tables — scout-pass survey (all 54
 cells × 3 seeds, mean ± std + 95 % CI, flagged "3-seed scout") and
 final-pass headline (top-3 + headline-if-needed × 5 seeds, mean ± std
 + 95 % CI, flagged "5-seed final"). `docs/ANALYSIS.md` quotes only
@@ -190,7 +190,7 @@ table is referenced as the selection-evidence backbone.
   **~17.5 CPU-hours total**, under the 24 h §2.4 envelope. Costed
   in the §2.4 essay and in the tiktoken/wall-clock table per ADR-003;
   full envelope tracked in `docs/COST_ANALYSIS.md` (D8).
-- `docs/ABLATION.md` ships **two** tables: scout-pass survey (all 54
+- `docs/ANALYSIS.md` ships **two** tables: scout-pass survey (all 54
   cells × 3 seeds, mean ± std + 95 % CI, flagged "3-seed scout") and
   final-pass headline (top-3 + headline-if-needed × 5 seeds, mean ±
   std + 95 % CI, flagged "5-seed final"). `docs/ANALYSIS.md` quotes

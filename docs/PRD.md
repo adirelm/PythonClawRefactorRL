@@ -100,7 +100,7 @@ screenshots — brief §3), one bug-report deliverable (brief §3
 - Obsidian Vault generation: programmatic NetworkX / pyvis hero shots
   (locked decision) plus the "before" / "after" Graph View screenshots
   required by brief §3.
-- Deep-research essay (`docs/RESEARCH_ESSAY.md`, brief §2.4) on the
+- Deep-research essay (`docs/ESSAY.md`, brief §2.4) on the
   GRAPHIFY × AI-agent relationship, 2500–3000 words, 4 sections,
   8–12 citations, 2 diagrams (locked decision).
 - Bug-report deliverable (`docs/BUG_REPORT.md`, brief §3) detailing at
@@ -295,7 +295,7 @@ Each `F#` is traceable to a brief §-id. The trace matrix
   `config/config.yaml` `ablation.grids.compact`, and `docs/ANALYSIS.md`.
   These are the **ablation grid values**, not the floor / ceiling of
   the parameter space — the parameter space proper is α, β ≥ 0.0 and
-  γ ∈ [0.0, 1.0] (ADR-007). The matrix lives in `docs/ABLATION.md`
+  γ ∈ [0.0, 1.0] (ADR-007). The matrix lives in `docs/ANALYSIS.md`
   with **mean ± std + paired-bootstrap 95 % CI per cell** (10 000
   resamples against the baseline cell α=0, β=0, γ=0, P_skills=0).
   Compute budget capped at the brief §2.4 envelope.
@@ -323,7 +323,7 @@ Each `F#` is traceable to a brief §-id. The trace matrix
      numbers in `docs/ANALYSIS.md`.
 
   Total budget: **~17.5 CPU-hours** (16 scout + 1.5 final), comfortably
-  under 24 h. The staging is documented per-cell in `docs/ABLATION.md`;
+  under 24 h. The staging is documented per-cell in `docs/ANALYSIS.md`;
   the 51 cells that receive only scout-pass coverage are explicitly
   flagged as "3-seed scout" in their table row, and the top-3 (or top-4
   with headline) carry the "5-seed final" flag.
@@ -355,7 +355,7 @@ Each `F#` is traceable to a brief §-id. The trace matrix
 
 ### 3.8 GRAPHIFY × AI essay (brief §2.4, locked decision)
 
-- **F14 (Research essay, brief §2.4)**. `docs/RESEARCH_ESSAY.md`,
+- **F14 (Research essay, brief §2.4)**. `docs/ESSAY.md`,
   2500–3000 words, 4 sections (Introduction; Static analysis tools
   landscape; AI-agent integration patterns; Limitations and future
   work), 8–12 citations with DOI / arXiv / ACM where applicable, 2
@@ -494,7 +494,7 @@ Inherited from `CLAUDE.md` Hard Constraints, plus A4-specific additions.
 
 | Req | Acceptance criterion | Evidence pointer |
 |-----|---------------------|------------------|
-| F1  | `state()` returns `(A, X)` with `A.shape == (|V|, |V|)` and `X.shape == (|V|, D)` where `D == config.state.feature_dim` (bound to `config/config.yaml`, single source of truth — body and acceptance read the same value, no drift); current `feature_dim == 5` covers LOC, cyclomatic, in-degree, out-degree, Degree Centrality | `tests/test_state_repr.py::test_state_shape` |
+| F1  | `state()` returns `(A, X)` with `A.shape == (|V|, |V|)` and `X.shape == (|V|, D)` where `D == config.state.feature_dim` (bound to `config/config.yaml`, single source of truth — body and acceptance read the same value, no drift); current `feature_dim == 16` = 5 graph-structural (LOC, cyclomatic, in-degree, out-degree, Degree Centrality) + L1/L2/L3 layer one-hots + age + reserved columns (column order frozen in `docs/STATE_DESIGN.md` §3) | `tests/unit/env/test_state.py::test_x_shape_is_n_v_by_16` |
 | F2  | `GraphifyAdapter.build(src_root, *, seed) -> networkx.DiGraph` (canonical signature per ADR-002) returns a `networkx.DiGraph` with weighted edges and `{kind, LOC, cyclomatic, layer, lazy_load_flag}` node attrs + `{rel_type, weight}` edge attrs; ADR-002 swap window verified by a stub-swap unit test | `tests/test_graphify_adapter.py::test_adapter_contract` |
 | F3  | Degree Centrality computed every step; Betweenness Centrality called **exactly twice** per `train_seed()` call (once at start, once at end); aggregated mean ± std + 95 % CI for both endpoints and Δ across ≥ 5 seeds | `tests/architecture/test_betweenness_call_count.py::test_betweenness_called_twice_per_seed` |
 | F4  | `step(action)` mutates G and returns `(state, reward, done, info)` for all three action types | `tests/test_env_step.py::test_all_actions` |
@@ -504,10 +504,10 @@ Inherited from `CLAUDE.md` Hard Constraints, plus A4-specific additions.
 | F8  | GAE advantage matches the closed-form on a 5-step synthetic trajectory | `tests/test_gae.py::test_gae_closed_form` |
 | F9  | `results/obsidian_vault/` contains one `.md` per node and `[[wikilink]]` edges | `tests/test_obsidian_export.py::test_vault_structure` |
 | F10 | `results/screenshots/before.png` and `after.png` exist, non-empty, > 1 KB each | `tests/test_screenshots.py::test_before_after_exist` |
-| F11 | `docs/ABLATION.md` contains 54 cells (scout: 3 seeds × 54 = 162 rows; final: 5 seeds × top-3 = 15 rows; +5-run headline augmentation if needed; total 177 or 182 rows), each with mean / std / paired-bootstrap 95 % CI vs baseline cell; scout rows flagged "3-seed scout", final rows flagged "5-seed final"; selection rule (rank by mean reward uplift over baseline, headline-cell always included) documented in the doc preamble; wall-clock per cell + total CPU-hours (~17.5 h) reported | `tests/test_ablation_table.py::test_matrix_complete` |
+| F11 | `docs/ANALYSIS.md` contains 54 cells (scout: 3 seeds × 54 = 162 rows; final: 5 seeds × top-3 = 15 rows; +5-run headline augmentation if needed; total 177 or 182 rows), each with mean / std / paired-bootstrap 95 % CI vs baseline cell; scout rows flagged "3-seed scout", final rows flagged "5-seed final"; selection rule (rank by mean reward uplift over baseline, headline-cell always included) documented in the doc preamble; wall-clock per cell + total CPU-hours (~17.5 h) reported | `tests/test_ablation_table.py::test_matrix_complete` |
 | F12 | No headline number in `docs/ANALYSIS.md` is single-seed; regex check for "seed=" plus "mean" plus "std" co-occurrence | `tests/test_analysis_seed_audit.py::test_no_single_seed_claims` |
 | F13 | `docs/BUG_REPORT.md` lists ≥ 2 bugs with subgraph evidence and remedy | `tests/test_bug_report.py::test_min_two_bugs` |
-| F14 | `docs/RESEARCH_ESSAY.md` is 2500–3000 words, 4 H2 sections, ≥ 8 citations, 2 figure references | `tests/test_essay_shape.py::test_word_count_and_structure` |
+| F14 | `docs/ESSAY.md` is 2500–3000 words, 4 H2 sections, ≥ 8 citations, 2 figure references | `tests/test_essay_shape.py::test_word_count_and_structure` |
 | F15 | `docs/SKILLS_ARCHITECTURE.md` contains H2 sections "L1 (Metadata)", "L2 (Instructions)", "L3 (Resources)" plus ≥ 2 concrete usage examples + the L1→L2→L3 contract diagram | `tests/test_skills_architecture_doc.py::test_structure_and_examples` |
 | F16 | `results/learning_curves/reward_vs_episode.png` exists (>1 KB) and `docs/ANALYSIS.md` contains a numeric ΔReward line with mean ± std + 95 % CI across ≥ 5 seeds | `tests/test_learning_curve.py::test_png_and_delta_reward` |
 | F17 | `src/services/vault_writer.write_vault(graph, out_dir)` is idempotent (two consecutive calls produce byte-identical directories) and emits exactly `|V|` `.md` files | `tests/unit/test_vault_writer.py::test_idempotent_and_node_count` |
@@ -728,9 +728,9 @@ D-ids the tests verify.
 - Lecture 7 (PPO + GAE) — the verbatim derivations the brief §2.3
   points at; transcribed in `docs/THEORY.md`.
 - Active Knowledge Architecture (AKA) source — informs the
-  L1 / L2 / L3 tiered-loading discussion in `docs/RESEARCH_ESSAY.md`.
+  L1 / L2 / L3 tiered-loading discussion in `docs/ESSAY.md`.
 
-### Papers (anchor set — full list in `docs/RESEARCH_ESSAY.md`)
+### Papers (anchor set — full list in `docs/ESSAY.md`)
 
 - Schulman, J., Wolski, F., Dhariwal, P., Radford, A., Klimov, O.
   (2017). *Proximal Policy Optimization Algorithms.* arXiv:1707.06347.
@@ -760,12 +760,12 @@ D-ids the tests verify.
   advantage, modularity Q, cohesion, coupling, and the
   `P_skills_loading_safety` penalty.
 - `docs/ANALYSIS.md` — multi-seed results (mean ± std + 95 % CI).
-- `docs/ABLATION.md` — 54-cell ablation matrix in scout-then-final
+- `docs/ANALYSIS.md` — 54-cell ablation matrix in scout-then-final
   staging (3-seed scout across all 54 + 5-seed final on top-3 cells,
   headline cell always included; ~17.5 CPU-h budget; see F11 + ADR-007
   for the full arithmetic and selection rule).
 - `docs/BUG_REPORT.md` — ≥ 2 architectural bugs the agent surfaced.
-- `docs/RESEARCH_ESSAY.md` — 2500–3000-word GRAPHIFY × AI essay
+- `docs/ESSAY.md` — 2500–3000-word GRAPHIFY × AI essay
   (brief §2.4, F14).
 - `docs/COST_ANALYSIS.md` — tiktoken cl100k_base headline + chars /
   bytes appendix + PPO runtime accounting + cost envelope vs F11

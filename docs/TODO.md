@@ -233,7 +233,7 @@ bundle that gates Phase 3 closure.
 | T3.4 | PPO trainer — clipped surrogate ε=0.2 (FIXED), value loss, entropy bonus; wraps our 4-tuple `SkillsGraphEnv` directly (NO gymnasium) | ✅ | `src/services/ppo_trainer.py`, commit `71f0213` |
 | T3.5 | Policy net — actor-critic torso, Categorical head, value head V_φ(s) | ✅ | `src/model/policy_net.py`, commit `71f0213` |
 | T3.6 | Encoder — GraphSAGE primary / MLP fallback (V_max=512 FALLBACK only per ADR-004 + ADR-008) | ✅ | `src/model/encoder.py`, commit `71f0213` |
-| T3.7 | Train script — end-to-end PPO rollout on `SkillsGraphEnv` across 5 seeds {42, 7, 123, 314, 271} | ✅ | `scripts/train_ppo.py` + isolated-subprocess wrapper `scripts/train_5seed_isolated.py`. Outcome post-RC-4: **all 5 of 5 seeds train cleanly** — 42 (−0.440), 7 (−0.141), 123 (−0.690), 314 (−0.595), 271 (−0.440); each 2 PPO iterations × 128 n_steps = 256 total steps, betweenness_calls=2/seed, ~10 s each. mean −0.461 ± 0.186 (n=5). `aggregate.json` reports `num_seeds=5`. The seed-123/314 hang was closed by RC-4 (SIGALRM Louvain cut + stored-mask Trajectory). See **Resolved gaps** below. |
+| T3.7 | Train script — end-to-end PPO rollout on `SkillsGraphEnv` across 5 seeds {42, 7, 123, 314, 271} | ✅ | `scripts/train_ppo.py` + isolated-subprocess wrapper `scripts/train_5seed_isolated.py`. Outcome (corrected slot-resolving env, sample_skills baseline cell): **all 5 of 5 seeds train cleanly** — 42 (−0.440), 7 (−0.440), 123 (−0.440), 314 (−0.548), 271 (−0.440); each 2 PPO iterations × 128 n_steps = 256 total steps, betweenness_calls=2/seed, ~10 s each. mean −0.462 ± 0.043 (n=5). `aggregate.json` reports `num_seeds=5`. The seed-123/314 hang was closed by RC-4 (SIGALRM Louvain cut + stored-mask Trajectory). See **Resolved gaps** below. |
 | T3.8 | Obsidian after-refactor hero shot (closes F10 partial → ✅) | ✅ | `results/figures/obsidian_after.png`, commit `71f0213` |
 | T3.9 | Betweenness CI chart + per-seed table — mean ± std + 95% CI across 5 seeds × 2 calls/seed | ✅ | `results/figures/betweenness_ci.png`, `results/data/betweenness_table.csv`, commit `71f0213` |
 
@@ -270,8 +270,8 @@ bundle that gates Phase 3 closure.
   thread (no threads, no GIL accumulation) in `src/services/metrics/modularity.py`;
   (b) stored action masks in `Trajectory` so `_eval` replays them instead of
   recomputing `compute_mask` ~1024×/PPO update.
-- **Outcome: 5 of 5 seeds OK.** 42 (−0.440), 7 (−0.141), 123 (−0.690),
-  314 (−0.595), 271 (−0.440); mean −0.461 ± 0.186 (n=5), each ~10 s, betweenness
+- **Outcome: 5 of 5 seeds OK** (corrected env, sample_skills baseline). 42 (−0.440), 7 (−0.440), 123 (−0.440),
+  314 (−0.548), 271 (−0.440); mean −0.462 ± 0.043 (n=5), each ~10 s, betweenness
   calls = 2/seed. `aggregate.json` reports `num_seeds=5`. F10 betweenness chart +
   table + D6 learning curve re-rendered at n=5. T3.7 / F10 now ✅. The −2 honesty
   penalty pre-committed for a 3/5 outcome is lifted per PRD §7 (`5/5 → done`).

@@ -263,12 +263,12 @@ CPU cliff on adversarial inputs, and GRAPHIFY's determinism makes such failures
 reproducible and bounded.
 
 The 81-cell reward-coefficient ablation (405/405 runs, all n_ok=5/5) anchors the
-claim quantitatively. The baseline (α=1, β=1, γ=0.5, P=−5) scores −0.461; the best
-cell (α=0.5, β=1, γ=1, P=−1) reaches +0.098, and only 6 of 81 cells are
-net-positive — all at α=0.5, γ=1 — while the worst (α=2, β=2, γ=0, P=−10) collapses
-to −1.158. A Sobol-lite decomposition ranks the modularity weight α (2.03) far
-above β (0.92), γ (0.83) and P_skills (≈0), so the sealed default α=1.0 (marginal
-−0.495) is demonstrably *not* the optimum — α=0.5 (marginal −0.258) is higher. That
+claim quantitatively. The baseline (α=1, β=1, γ=0.5, P=−5) scores −0.462; the best
+cell (α=0.5, β=0.5, γ=1, P=−1) reaches +0.045, and only 3 of 81 cells are
+net-positive — all at α=0.5, β=0.5, γ=1 — while the worst (α=2, β=2, γ=0, P=−10)
+collapses to −1.241. A Sobol-lite decomposition ranks the modularity weight α (1.91)
+far above γ (1.10), β (0.97) and P_skills (≈0), so the sealed default α=1.0 (marginal
+−0.488) is demonstrably *not* the optimum — α=0.5 (marginal −0.280) is higher. That
 the reward surface is this sensitive to one hand-set coefficient is the strongest
 argument for the hybrid future of §5: the graph fixes which moves are legal, but
 *valuing* those moves is exactly where a learned or LLM-proposed signal belongs.
@@ -282,7 +282,7 @@ a structural reward cannot score [liu2023chatgpt].
 Three honest limits bound the claims above. **First**, the smoke scale: the
 5-seed protocol completes on **all 5/5 seeds** after RC-4, but at a 256-step
 PPO budget — a deliberately short smoke run, not convergence-scale training.
-The near-neutral mean reward on the real graph (−0.027 ± 0.022) reflects the
+The near-neutral mean reward on the real graph (−0.020 ± 0.039) reflects the
 short horizon, not a broken policy. Per the locked HONESTY policy (5/5 → promote · 4/5 → partial ·
 3/5 → −2 · <3/5 → halt), this ships as **promote**; the fix trail is in
 `docs/BUG_REPORT.md` Appendix A2. **Second**, the GIL caveat is now resolved:
@@ -301,8 +301,8 @@ adjacency structure, the action mask, and the modularity / cohesion / coupling
 signal — while a learned policy, and prospectively an LLM, supplies *what is worth
 doing*. The empirical anchor is honest about that boundary. At a 256-step smoke
 budget the PPO policy holds the real PythonClaw architecture roughly steady
-(−0.027 ± 0.022 over five seeds), and even the best ablation coefficients only
-reach break-even — improvement here is bounded by compute, not by the design. The
+(−0.020 ± 0.039 over five seeds), and even the best ablation coefficients only
+reach break-even — improvement here is bounded by compute, not design. The
 natural next step is a hybrid loop at the A_max action boundary, where an LLM
 proposes candidate (action, justification) pairs that the PPO policy accepts or
 rejects under the graph's deterministic priors [chen2021codex]. The thesis would be

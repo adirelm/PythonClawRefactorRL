@@ -11,30 +11,51 @@ hard lazy-load-break penalty.
 
 > **Status: complete (Phases 0–4).** Custom non-Gymnasium environment, PPO+GAE
 > trainer, 5-seed training, 81-cell × 5-seed ablation, cost analysis, and the
-> §2.4 essay all landed. Quality gates green: ruff clean · 352 tests · 94%
-> coverage · every `.py` ≤150 LOC.
+> §2.4 essay all landed. Quality gates green: ruff clean · 356 tests (355 pass,
+> 1 skip) · 94% coverage · every `.py` ≤150 LOC.
 
 This README **is the submission report** (brief §3). Sections
-[3](#3-obsidian-before--current-architecture)–[6](#6-bug-report-architectural-smells-in-the-skills-module)
+[3](#3-obsidian-before--current-architecture)–[6](#6-bug-report--architectural-bugs-in-the-skills-module)
 are the graded deliverables; deeper detail lives in the linked docs.
 
 ---
 
-## Quick Start
+## Installation
 
 ```bash
-uv sync --dev
+uv sync --dev          # uv-only — no pip/conda (CLAUDE.md §7). Installs the locked deps.
 
-# Quality gates
-uv run pytest tests/ --cov=src --cov-report=term-missing   # 352 pass, 1 skip, 94% cov
+# Verify the quality gates pass on a fresh checkout:
+uv run pytest tests/ --cov=src --cov-report=term-missing   # 355 pass, 1 skip, 94% cov
 uv run ruff check src/ tests/ scripts/                     # 0 violations
 uv run python scripts/check_file_sizes.py                  # all .py ≤150 LOC
+```
 
-# Reproduce the headline results
+## Usage
+
+All business logic is reached through the `RefactorSDK` (CLAUDE.md §3); the CLI
+is the thin user surface. Developer scripts under `scripts/` are tooling and may
+import internals directly (see [Configuration](#configuration)).
+
+```bash
+# CLI surface (single SDK entry point):
+uv run python -m src.cli graph     # build + summarise the Skills dependency graph
+uv run python -m src.cli cost      # per-layer tiktoken token volume
+uv run python -m src.cli info      # project + config summary
+```
+
+## Examples
+
+```bash
+# Reproduce the headline results (see sections 3–6 below for the rendered output):
 uv run python scripts/train_5seed_isolated.py              # 5-seed PPO training
 uv run python scripts/run_ablation.py --grid compact       # 81-cell × 5-seed ablation
 uv run python scripts/render_learning_curve.py             # D6 reward curve
 ```
+
+Worked, rendered examples are the graded deliverables in
+[§3](#3-obsidian-before--current-architecture)–[§6](#6-bug-report--architectural-bugs-in-the-skills-module)
+below (before/after graphs, ablation heatmap, metric-improvement curves, bug report).
 
 ---
 
@@ -95,32 +116,32 @@ architecture (full analysis: [`docs/BUG_REPORT.md`](docs/BUG_REPORT.md),
 
 ---
 
-## 4. Obsidian "after" — post-refactor topology
+## 4. Obsidian "after" — same-graph before → after
 
-![Obsidian after](results/figures/obsidian_after.png)
+This is the **topology comparison the brief asks for, on one graph**: the
+**same 30-node `sample_skills` corpus**, before any edit (left) and after the
+trained `seed=42` PPO policy has refactored it (right). `sample_skills` is used
+here (not the real 1,190-node package) precisely so the before/after stay legible
+on **one** graph — the real package is an illegible hairball once edited, so its
+quantitative change is reported numerically instead (§5.3 betweenness, §5.4
+per-metric), and its dense topology is the §3 "before" analysis target.
 
-This is a **mid-rollout snapshot** (32 of 64 steps) of the trained PPO policy
-at `seed=42` — chosen over the terminal frame because by termination the policy
-collapses the graph to a degenerate ~2-node pair that reads as a broken figure
-(rationale in `scripts/capture_obsidian_after.py`).
+| Before (initial) | After (policy @ step 32) |
+|---|---|
+| ![sample before](results/figures/obsidian_sample_before.png) | ![sample after](results/figures/obsidian_after.png) |
 
-> **Corpus note (read before comparing §3 ↔ §4).** The §3 "before" is the **real**
-> 1,190-node PythonClaw package; this "after" frame replays the policy on the
-> controlled **30-node `sample_skills`** corpus *for legibility* — the real graph
-> is an illegible hairball once edited, so the two Obsidian frames are deliberately
-> **different graphs**. The before/after frames show the *mechanism* (legal
-> structural edits); the **quantitative** real-graph topology change is in §5.3
-> (betweenness, 2×/seed) and §5.4 (per-metric modularity/cohesion/coupling), both
-> computed on the real 1,190-node graph. The −0.461 figure below is the
-> `sample_skills` result (the real-graph reward is −0.027, §5.1).
-
-How the topology changed: the policy applies SPLIT / MERGE / REWIRE edits that
-redistribute edges away from the `core.agent` god-module hub and decompose
-oversized modules, while the action mask forbids moves that would break the
-L1→L3 lazy-load contract.
+The "after" is a **mid-rollout snapshot** (32 of 64 steps): by termination the
+policy collapses the graph to a degenerate ~2-node pair that reads as a broken
+figure (rationale in `scripts/capture_obsidian_after.py`), so the mid-frame best
+shows the *mechanism*. How the topology changed: the policy applies SPLIT / MERGE
+/ REWIRE edits — resolved **slot-correctly** so each applied edit matches the
+action the legality mask marked legal (see `src/env/action_resolver.py`) — that
+redistribute edges and decompose/merge modules, while the action mask forbids
+moves that would break the L1→L3 lazy-load contract.
 
 > **Honest framing.** At the 256-step *smoke* budget the **net** metric gain is
-> modest — mean final reward is **−0.461 ± 0.186** (n=5), i.e. most steps are
+> modest — mean final reward is **−0.462 ± 0.043** (n=5) on this `sample_skills`
+> corpus (−0.020 on the real graph, §5.1), i.e. most steps are
 > failed/NOOP edits and the policy has not yet converged to a net-positive
 > refactor. The "after" frame demonstrates the *mechanism* (legal structural
 > edits across all three layers), not a converged optimum; convergence-scale
@@ -138,10 +159,10 @@ L1→L3 lazy-load contract.
 Mean ± 95% CI over **all 5 sealed seeds** {42, 7, 123, 314, 271}, 256 steps each,
 on the real 1,190-node PythonClaw dependency graph (~130–150 s/seed). Reward =
 `α·ΔModularity + β·ΔCohesion − γ·Coupling + P_skills` (Newman-Girvan Q). Per-seed
-finals: 42=−0.066, 7=−0.006, 123=−0.034, 314=−0.008, 271=−0.022 ⇒
-**−0.027 ± 0.022** — on the real graph the policy nearly breaks even (vs −0.461 on
-the smaller controlled corpus), i.e. its refactor edits roughly hold modularity
-steady at the 256-step smoke budget.
+finals: 42=−0.044, 7=−0.055, 123=−0.006, 314=−0.019, 271=+0.025 ⇒
+**−0.020 ± 0.039** — on the real graph the policy nearly breaks even (vs −0.462 on
+the smaller controlled corpus; one seed is now net-positive), i.e. its refactor
+edits roughly hold modularity steady at the 256-step smoke budget.
 
 ### 5.2 Reward-coefficient ablation (81 cells × 5 seeds = 405 runs, all ok)
 
@@ -155,15 +176,16 @@ steady at the 256-step smoke budget.
 
 | cell | (α, β, γ, P_skills) | mean reward | Δ vs baseline |
 |---|---|---|---|
-| baseline | (1.0, 1.0, 0.5, −5.0) | −0.461 ± 0.259 | 0.000 |
-| **best** | (0.5, 1.0, 1.0, −1.0) | **+0.098 ± 0.507** | **+0.559** |
-| worst | (2.0, 2.0, 0.0, −10.0) | −1.158 ± 0.418 | −0.697 |
+| baseline | (1.0, 1.0, 0.5, −5.0) | −0.462 ± 0.060 | 0.000 |
+| **best** | (0.5, 0.5, 1.0, −1.0) | **+0.045 ± 0.098** | **+0.506** |
+| worst | (2.0, 2.0, 0.0, −10.0) | −1.241 ± 0.148 | −0.779 |
 
-**Sobol-lite sensitivity: α (2.03) ≫ β (0.92) > γ (0.83) > P_skills (0.00).**
-α (the ΔModularity weight) dominates by ~2.2×; α=2.0 crushes reward while α=0.5
+**Sobol-lite sensitivity: α (1.91) ≫ γ (1.10) > β (0.97) > P_skills (0.00).**
+α (the ΔModularity weight) dominates by ~1.7×; α=2.0 crushes reward while α=0.5
 lifts it — the sealed default α=1.0 is mid-grid, **not** the optimum. P_skills
 scores 0 because the lazy-load-break event never fires inside the 256-step
-budget. CIs use Student-t at dof=4 (n=5). Full breakdown + marginals:
+budget. CIs use Student-t at dof=4 (n=5); under the corrected slot-resolving env
+they tighten sharply (best ±0.098) and only 3 of 81 cells are net-positive. Full breakdown + marginals:
 [`docs/ANALYSIS.md`](docs/ANALYSIS.md).
 
 ### 5.3 Betweenness centrality (brief §2.2: 2×/seed)
@@ -183,13 +205,13 @@ snapshotting modularity / cohesion / coupling at every rollout step
 (`src/services/_metric_trace.py` → `scripts/render_metric_curves.py` →
 `results/data/metric_curves.csv`, mean ± 95% CI over 5 seeds): at the 256-step
 smoke budget all three are **essentially flat** — modularity 0.586 → 0.572,
-cohesion ≈ 0.057, coupling ≈ 0.32 — i.e. the default-config policy holds the
-architecture steady rather than improving it, matching the −0.027 reward.
+cohesion 0.061 → 0.058, coupling 0.309 → 0.318 — i.e. the default-config policy
+holds the architecture steady rather than improving it, matching the −0.020 reward.
 
 **Did more training + better coefficients help?** A separate **extended run at
 4× budget (1,024 steps)** using the **ablation-winning** coefficients
-(α=0.5, β=1.0, γ=1.0, P_skills=−1.0 — the net-positive region of §5.2) still
-breaks even: mean reward **−0.055 ± 0.019** (n=5), per-metric Δ modularity
+(α=0.5, β=0.5, γ=1.0, P_skills=−1.0 — the net-positive region of §5.2) still
+breaks even: mean reward **−0.043 ± 0.019** (n=5), per-metric Δ modularity
 −0.013 / cohesion −0.003 / coupling −0.002 over the rollout
 (`results/figures/metric_improvement_curves_converged.png`,
 `results/data/metric_curves_converged.csv`). So **neither budget × config
@@ -198,24 +220,31 @@ evidence for the convergence-scale limitation (§7). The improvement curves are
 delivered and reported honestly rather than cherry-picked. (Reproduce:
 `uv run python scripts/train_ppo.py --seeds 42 7 123 314 271 --total-steps 1024
 --source-dir vendor/pythonclaw/pythonclaw --output-dir results/training_converged
---alpha 0.5 --beta 1.0 --gamma 1.0 --p-skills -1.0` then `render_metric_curves.py
+--alpha 0.5 --beta 0.5 --gamma 1.0 --p-skills -1.0` then `render_metric_curves.py
 --training-dir results/training_converged`.)
 
 ---
 
-## 6. Bug report — real bugs in PythonClaw
+## 6. Bug report — architectural bugs in the Skills module
 
-Found by GRAPHIFY reverse-engineering (pinned SHA `7787bb43`) + a **30-agent
-hunt** (24 hunters → 50 candidates → 6 adversarial verifiers, all CONFIRMED) +
-a 20-agent verify pass. Full write-up + file:line evidence:
-[`docs/BUG_REPORT.md`](docs/BUG_REPORT.md).
+The brief (§3) asks for **≥2 architectural bugs/failures in the Skills module**.
+Bugs **3, 5, 6, 7** below are all in the Skills subsystem
+(`core/skillhub.py` + `core/skill_loader.py`); **§7 is a direct lazy-load-tiering
+violation** of the exact L1/L2/L3 design this project models. Findings 5 and 7 are
+reproduced. The three security bugs (1, 2, 4) in the agent/tool/web layers are
+reported as additional genuine defects. Found via GRAPHIFY reverse-engineering
+(pinned SHA `7787bb43`) + a 30-agent hunt + a focused `skill_loader.py` audit;
+full file:line evidence in [`docs/BUG_REPORT.md`](docs/BUG_REPORT.md).
 
-| # | Bug | Severity |
-|---|---|---|
-| 1 | **Command injection** — `run_command` runs `subprocess.run(cmd, shell=True)` on LLM input, no sandbox (CWE-78) | 🔴 CRITICAL |
-| 2 | **Unauthenticated, network-exposed web dashboard → remote RCE** — every route + `/ws/chat` has no auth, binds `0.0.0.0`, no `Origin` check (CSWSH); chat → `run_command` | 🔴 CRITICAL |
-| 3 | **Zip Slip** in marketplace skill install — `os.path.join(skill_dir, member)` from a downloaded ZIP with no traversal check → write-anywhere/RCE (CWE-22) | 🔴 CRITICAL |
-| 4 | **Sandbox bypass** — `read_file` reads any path, `send_file` exfiltrates any file (both skip the sandbox `write_file` enforces) | 🟠 HIGH |
+| # | Bug | Severity | Skills module? |
+|---|---|---|---|
+| 3 | **Zip Slip** in marketplace skill install — `os.path.join(skill_dir, member)` from a downloaded ZIP, no traversal check → write-anywhere/RCE (CWE-22) | 🔴 CRITICAL | ✅ |
+| 5 | **No error boundary in discovery** — one unreadable/bad skill folder raises out of `discover()` (only `OSError` caught) and kills the *whole* catalog + agent boot (reproduced) | 🟡 MEDIUM | ✅ |
+| 6 | **L1 cache defeated** — the per-instance metadata cache is discarded by the web layer + module API, so every call re-scans the tree and re-reads every `SKILL.md` | 🔵 LOW | ✅ |
+| 7 | **Lazy-load-tiering violation** — L1 `discover()` (documented "frontmatter only") `f.read()`s the *entire* file and parses the L2 body, then discards it: eager L2 disk I/O for every skill at startup (reproduced) | 🟡 MEDIUM | ✅ |
+| 1 | **Command injection** — `run_command` runs `subprocess.run(cmd, shell=True)` on LLM input, no sandbox (CWE-78) | 🔴 CRITICAL | — |
+| 2 | **Unauthenticated web dashboard → remote RCE** — every route + `/ws/chat` has no auth, binds `0.0.0.0`, no `Origin` check (CSWSH); chat → `run_command` | 🔴 CRITICAL | — |
+| 4 | **Sandbox bypass** — `read_file` reads any path, `send_file` exfiltrates any file (both skip the sandbox `write_file` enforces) | 🟠 HIGH | — |
 
 Plus one **smell** (not a bug, honestly labelled): the God Object `core/agent.py`
 (1,151 LOC, 27 collaborators in `__init__`). PythonClaw has no import cycles or
@@ -228,7 +257,7 @@ dead code. An appendix covers our own harness defects.
 - **Budget vs. convergence.** 256 steps/seed is a smoke run; point estimates are
   directional, not convergence-scale (hence the near-zero/negative mean reward).
   An **extended 4×-budget run (1,024 steps) with the ablation-best coefficients
-  also breaks even** (−0.055 ± 0.019, n=5; §5.4), so decisive net-positive
+  also breaks even** (−0.043 ± 0.019, n=5; §5.4), so decisive net-positive
   refactoring would require a substantially larger budget (≫1k steps) and/or a
   reward upgrade — this is measured, not assumed.
 - **Single module / single corpus.** Only the `Skills` layer is analysed; no

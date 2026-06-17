@@ -1,9 +1,16 @@
 """Phase-4 COST-3: emit per-phase JSONL corpora for the TripleCounter (COST-4).
 
 For each of the five project phases (0 = bootstrap through 4 = current),
-walk ``git log`` for the phase's commit range plus the optional verbatim
-prompt log at ``docs/PROMPTS.md``, and write a JSONL file at
-``results/cost/phase_<n>.jsonl`` with one record per source unit.
+walk ``git log`` and the optional verbatim prompt log at ``docs/PROMPTS.md``,
+and write a JSONL file at ``results/cost/phase_<n>.jsonl`` with one record per
+source unit.
+
+Phase assignment is derived from the **commit-subject "Phase N" marker** (a
+running counter carried forward across commits that don't restate the phase),
+NOT from pinned commit SHAs. SHAs are mutable — a history rewrite (e.g. a PII
+scrub) orphans any hardcoded hash and silently empties the corpora — whereas
+the human-authored "Phase N —" subject convention survives rebases and
+filter-repo runs. This keeps the script correct after history surgery.
 
 Record schema (sealed for COST-4 downstream consumption):
 
@@ -15,15 +22,14 @@ Record schema (sealed for COST-4 downstream consumption):
 * ``sha`` -- 40-char commit hash for git rows; empty for prompt rows
 
 The output is intentionally append-clean: re-running overwrites each phase
-file in place so reruns stay deterministic. COST-4 will stream these files
-through ``TripleCounter`` and aggregate into ``cost_table.csv`` per
-ADR-003a's 15-column schema.
+file in place so reruns stay deterministic.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -34,15 +40,8 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "results" / "cost"
 PROMPTS_MD = REPO_ROOT / "docs" / "PROMPTS.md"
 
-# Sealed phase boundaries (end_sha is the last commit of the phase, inclusive).
-# Phase 0 starts at the root commit (no parent), so we special-case it below.
-PHASE_RANGES: list[tuple[int, str, str]] = [
-    (0, "ROOT", "3b0ed5b2e96392b2d56fea3621c6ac64b88f9deb"),  # bootstrap..gate-fix
-    (1, "0165fa2925228558fa23e658c72d7da5d1d19dea", "9660830f97d64a8a5903ab063805b81359f711e8"),
-    (2, "ec1288a05e059c6602a3b2fa22834dee8bee9a23", "8264a84c3b6a191eecfec1c0cb804bfc202e0e7f"),
-    (3, "71f0213653fdc5ea56b6eb88062dcac9478851e7", "1bb2d8f2b8b23ec84ca59048d9abde418f54a7a9"),
-    (4, "dbdd1a5021f2928a03751b8fcb3db62c0623bd26", "HEAD"),
-]
+NUM_PHASES = 5  # phases 0..4
+_PHASE_RE = re.compile(r"phase[ \-]?([0-4])", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -58,19 +57,17 @@ class Record:
         return json.dumps(self.__dict__, ensure_ascii=False)
 
 
-def _git_rev_list(start_sha: str, end_sha: str) -> list[str]:
-    """Return commit SHAs in phase range, oldest-first.
+def _commits_oldest_first(git_range: str | None) -> list[str]:
+    """Return commit SHAs (oldest-first) for ``git_range`` or all of HEAD.
 
-    Degrades gracefully to ``[]`` if a boundary SHA is unreachable (e.g. a
-    shallow CI checkout without ``fetch-depth: 0``, or a rewritten history) so
-    corpus collection never hard-crashes — CI fetches full history, but this
-    keeps the script robust everywhere.
+    Degrades gracefully to ``[]`` if the range/repo is unreachable (shallow CI
+    checkout, rewritten boundary, or a vanished ``.git``) so collection never
+    hard-crashes — CI fetches full history; this keeps the script robust.
     """
-    # ROOT phase: all commits reachable from end_sha (incl. root); else the range.
-    spec = [end_sha] if start_sha == "ROOT" else [f"{start_sha}^..{end_sha}"]
+    spec = [git_range] if git_range else ["HEAD"]
     try:
         out = subprocess.check_output(["git", "rev-list", "--reverse", *spec], cwd=REPO_ROOT, text=True)
-    except subprocess.CalledProcessError:
+    except (subprocess.CalledProcessError, FileNotFoundError):
         return []
     return [s for s in out.splitlines() if s]
 
@@ -90,16 +87,26 @@ def _commit_detail(sha: str) -> tuple[str, str, str]:
     return ts, subject, body
 
 
-def collect_phase(phase: int, start_sha: str, end_sha: str) -> list[Record]:
-    """Build the git-side records for one phase."""
-    records: list[Record] = []
-    for sha in _git_rev_list(start_sha, end_sha):
+def _phase_of(subject: str, running: int) -> int:
+    """Phase from a ``Phase N`` subject marker; else carry ``running`` forward."""
+    match = _PHASE_RE.search(subject)
+    return min(NUM_PHASES - 1, int(match.group(1))) if match else running
+
+
+def _git_records(git_range: str | None) -> dict[int, list[Record]]:
+    """Bucket every commit into its phase. An explicit ``git_range`` is treated
+    as a phase-4 override (matches the legacy ``--git-range`` contract)."""
+    buckets: dict[int, list[Record]] = {p: [] for p in range(NUM_PHASES)}
+    running = 0
+    for sha in _commits_oldest_first(git_range):
         ts, subject, body = _commit_detail(sha)
+        phase = 4 if git_range else _phase_of(subject, running)
+        running = phase
         if subject:
-            records.append(Record(phase, "git", "commit_subject", subject, ts, sha))
+            buckets[phase].append(Record(phase, "git", "commit_subject", subject, ts, sha))
         if body:
-            records.append(Record(phase, "git", "commit_body", body, ts, sha))
-    return records
+            buckets[phase].append(Record(phase, "git", "commit_body", body, ts, sha))
+    return buckets
 
 
 def collect_prompts_md(phase: int, prompts_path: Path) -> list[Record]:
@@ -123,35 +130,20 @@ def write_jsonl(records: list[Record], output_path: Path) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--output-dir",
-        type=Path,
-        default=DEFAULT_OUTPUT_DIR,
-        help="Directory for phase_<n>.jsonl files (default: results/cost/)",
-    )
-    parser.add_argument(
-        "--prompts-md",
-        type=Path,
-        default=PROMPTS_MD,
-        help="Path to docs/PROMPTS.md (skipped silently if absent)",
-    )
+    parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
+    parser.add_argument("--prompts-md", type=Path, default=PROMPTS_MD)
     parser.add_argument(
         "--git-range",
         type=str,
         default=None,
-        help="Override: single 'START..END' range applied to phase 4 only.",
+        help="Override: a 'START..END' range collected wholesale into phase 4.",
     )
     args = parser.parse_args(argv)
 
-    phase_ranges = list(PHASE_RANGES)
-    if args.git_range:
-        start, _, end = args.git_range.partition("..")
-        phase_ranges[-1] = (4, start or "ROOT", end or "HEAD")
-
+    buckets = _git_records(args.git_range)
     sizes: dict[int, int] = {}
-    for phase, start_sha, end_sha in phase_ranges:
-        records = collect_phase(phase, start_sha, end_sha)
-        records += collect_prompts_md(phase, args.prompts_md)
+    for phase in range(NUM_PHASES):
+        records = buckets[phase] + collect_prompts_md(phase, args.prompts_md)
         out_path = Path(args.output_dir) / f"phase_{phase}.jsonl"
         write_jsonl(records, out_path)
         sizes[phase] = len(records)

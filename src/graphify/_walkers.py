@@ -101,6 +101,12 @@ def _calls(defs: dict[str, ast.AST], by_class: dict[str, set[str]], mod: str,
 
 
 def walk_py(py: Path, root: Path):
+    """Parse one ``.py`` file → (nodes, edges) for the dependency graph.
+
+    Emits a module node plus def/class nodes (with LOC + cyclomatic attrs) and
+    import / inheritance / call edges, including ``external:*`` placeholder
+    nodes for out-of-tree references. Unparseable files degrade to ``([], [])``.
+    """
     try:
         text = py.read_text(encoding="utf-8")
         tree = ast.parse(text)
@@ -121,7 +127,12 @@ def walk_py(py: Path, root: Path):
     return nodes, edges
 
 
-def walk_skill_json(p: Path):  # one skill_layer node + depends_on edges
+def walk_skill_json(p: Path):
+    """Parse one Skills ``*.json`` → one ``skill_layer`` node + depends_on edges.
+
+    Returns ``([], [])`` for non-Skills JSON or unparseable files; L2/L3 layers
+    are tagged ``lazy`` to feed the lazy-load invariant monitor (ADR-005).
+    """
     layer = _json_layer(p)
     if layer is None:
         return [], []

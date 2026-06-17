@@ -2,8 +2,11 @@
 
 Phase-3 ``_apply_action`` dispatches SPLIT/MERGE/REWIRE via
 ``src.env._apply_action`` (kept in a sibling module so this file stays
-≤150 LOC per CLAUDE.md §1). Failed ops log + pass so the agent learns
-to avoid them through the reward signal.
+≤150 LOC per CLAUDE.md §1). It resolves each ``Action.secondary`` exactly
+as ``compute_mask`` does (top-M similarity / top-R low-degree slot, via
+``action_resolver``) before applying the attr-preserving ``refactor_ops``,
+so the executed edit matches the masked-legal one. Failed ops log + pass
+so the agent learns to avoid them through the reward signal.
 """
 
 from __future__ import annotations

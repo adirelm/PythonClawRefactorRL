@@ -50,7 +50,7 @@ from scripts._capture_obsidian_lib import render, verify_png  # noqa: E402
 from src.env.actions import global_index_to_action  # noqa: E402
 from src.env.skills_graph_env import SkillsGraphEnv  # noqa: E402
 from src.model.policy_net import PolicyNet  # noqa: E402
-from src.services.ppo_trainer import _pad as _state_to_padded  # noqa: E402
+from src.services._ppo_helpers import pad_state as _state_to_padded  # noqa: E402
 
 _DEFAULT_CHECKPOINT = _REPO_ROOT / "results" / "training" / "seed_42" / "checkpoint.pt"
 _DEFAULT_PNG = _REPO_ROOT / "results" / "figures" / "obsidian_after.png"

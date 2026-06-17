@@ -16,29 +16,35 @@ from src.env.skills_graph_env import SkillsGraphEnv
 from src.model.policy_net import PolicyNet
 from src.services._ppo_helpers import pad_state
 from src.services.gae_buffer import Trajectory, compute_gae_advantages, compute_returns
+from src.utils.config_loader import get_ppo_config
 
-_CLIP, _LAM, _GAMMA = 0.2, 0.95, 0.99
+_CLIP, _LAM = 0.2, 0.95  # sealed values (brief §2.3 / PRD-GAE FR-4) — seal re-checked in __init__
 
 
 @dataclass
 class PPOConfig:
-    """Hyperparameter bundle (keeps ``PPOTrainer.__init__`` argument count sane)."""
+    """Hyperparameter bundle, populated from config.ppo (CLAUDE.md §4 single source)."""
 
-    clip_eps: float = _CLIP
-    gae_lambda: float = _LAM
-    gamma: float = _GAMMA
-    lr: float = 3e-4
-    n_steps: int = 128
-    n_epochs: int = 4
-    batch_size: int = 64
-    vf_coef: float = 0.5
+    clip_eps: float
+    gae_lambda: float
+    gamma: float
+    lr: float
+    n_steps: int
+    n_epochs: int
+    batch_size: int
+    vf_coef: float
+
+    @classmethod
+    def from_config(cls, **overrides) -> PPOConfig:
+        """Build from config.ppo; ``overrides`` (test/ablation kwargs) win per-call."""
+        return cls(**{**get_ppo_config(), **overrides})
 
 
 class PPOTrainer:
     """PPO with clipped surrogate + GAE — wraps our 4-tuple env directly."""
 
     def __init__(self, env: SkillsGraphEnv, policy: PolicyNet, **kwargs) -> None:
-        cfg = PPOConfig(**kwargs)
+        cfg = PPOConfig.from_config(**kwargs)
         if float(cfg.clip_eps) != _CLIP or float(cfg.gae_lambda) != _LAM:
             raise ValueError(f"clip_eps/gae_lambda sealed at {_CLIP}/{_LAM}; got {cfg}")
         self.env, self.policy, self.cfg = env, policy, cfg

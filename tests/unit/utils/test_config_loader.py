@@ -8,6 +8,7 @@ from src.utils import config_loader
 from src.utils.config_loader import (
     get_canonical_reward_coeffs,
     get_ppo_clip_eps,
+    get_ppo_config,
     get_seeds,
     load_config,
 )
@@ -84,3 +85,44 @@ def test_clip_eps_wrong_value_raises(monkeypatch):
     monkeypatch.setattr(config_loader, "load_config", lambda: bad_cfg)
     with pytest.raises(AssertionError, match=r"clip_eps must be 0\.2"):
         get_ppo_clip_eps()
+
+
+def test_get_ppo_config_sources_every_tunable():
+    """All PPO hyperparameters resolve from config.ppo (CLAUDE.md §4 single source)."""
+    ppo = get_ppo_config()
+    assert ppo["clip_eps"] == 0.2
+    assert ppo["gae_lambda"] == 0.95
+    assert ppo["gamma"] == 0.99
+    assert ppo["lr"] == pytest.approx(3.0e-4)
+    assert ppo["n_steps"] == 128
+    assert ppo["n_epochs"] == 4
+    assert ppo["batch_size"] == 64
+    assert ppo["vf_coef"] == 0.5
+    assert set(ppo) == {
+        "clip_eps",
+        "gae_lambda",
+        "gamma",
+        "lr",
+        "n_steps",
+        "n_epochs",
+        "batch_size",
+        "vf_coef",
+    }
+
+
+def test_get_ppo_config_rejects_non_canonical_gae_lambda(monkeypatch):
+    bad_cfg = {
+        "ppo": {
+            "clip_eps": 0.2,
+            "gae_lambda": 0.9,
+            "gamma": 0.99,
+            "learning_rate": 3.0e-4,
+            "n_steps": 1,
+            "n_epochs": 1,
+            "batch_size": 1,
+            "vf_coef": 0.5,
+        }
+    }
+    monkeypatch.setattr(config_loader, "load_config", lambda: bad_cfg)
+    with pytest.raises(AssertionError, match=r"gae_lambda must be 0\.95"):
+        get_ppo_config()

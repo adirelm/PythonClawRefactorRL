@@ -46,10 +46,12 @@ class State:
 
     @property
     def num_nodes(self) -> int:
+        """Number of graph nodes (rows of ``A`` / length of ``node_ids``)."""
         return len(self.node_ids)
 
     @property
     def num_edges(self) -> int:
+        """Number of directed edges (non-zero entries of adjacency ``A``)."""
         return int(self.A.nnz)
 
     @classmethod

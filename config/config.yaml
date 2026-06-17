@@ -1,4 +1,4 @@
-version: "1.3.0"
+version: "1.4.0"
 
 ppo:
   clip_eps: 0.2  # FIXED by ex04 §2.3 — do not tune; asserted in test_config_loader.py::test_clip_eps_is_exactly_0_2 + test_ppo_trainer.py::test_trainer_uses_canonical_clip_eps_0_2
@@ -7,8 +7,6 @@ ppo:
   n_epochs: 4
   learning_rate: 3.0e-4
   vf_coef: 0.5
-  ent_coef: 0.01
-  max_grad_norm: 0.5
   gae_lambda: 0.95  # FIXED by ex04 §2.3 — do not tune (PRD-GAE FR-4; SB3 idiom)
   gamma: 0.99  # GAE discount factor (PRD-GAE FR-5; SB3 idiom)
 

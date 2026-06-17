@@ -18,6 +18,17 @@ _DEFAULT_CONFIG_PATH = _REPO_ROOT / "config" / "config.yaml"
 # Brief / ADR invariants — module-level constants so accessors stay magic-number-free.
 MIN_SEEDS = 5  # ADR-006
 PPO_CLIP_EPS_CANONICAL = 0.2  # brief §2.3 (FIXED, do not tune)
+PPO_GAE_LAMBDA_CANONICAL = 0.95  # PRD-GAE FR-4 (FIXED, do not tune)
+# Tunable PPO hyperparameters sourced from config.ppo (CLAUDE.md §4 single source).
+# Maps the dataclass field name -> config.ppo key (learning_rate is spelled out there).
+_PPO_TUNABLES: tuple[tuple[str, str, type], ...] = (
+    ("gamma", "gamma", float),
+    ("lr", "learning_rate", float),
+    ("n_steps", "n_steps", int),
+    ("n_epochs", "n_epochs", int),
+    ("batch_size", "batch_size", int),
+    ("vf_coef", "vf_coef", float),
+)
 
 
 @lru_cache(maxsize=1)
@@ -66,3 +77,25 @@ def get_ppo_clip_eps() -> float:
     clip_eps = float(cfg["ppo"]["clip_eps"])
     assert clip_eps == PPO_CLIP_EPS_CANONICAL, f"PPO clip_eps must be 0.2 (brief §2.3), got {clip_eps}"
     return clip_eps
+
+
+def get_ppo_config() -> dict:
+    """Return the full PPO hyperparameter set from config.ppo (CLAUDE.md §4).
+
+    The single source of truth consumed by ``PPOConfig.from_config`` — no PPO
+    hyperparameter is hardcoded in ``src/services``. Asserts the two sealed
+    values (clip_eps=0.2 per brief §2.3, gae_lambda=0.95 per PRD-GAE FR-4) so
+    misconfiguration fails fast before training.
+    """
+    cfg = load_config()
+    ppo = cfg["ppo"]
+    clip_eps = float(ppo["clip_eps"])
+    gae_lambda = float(ppo["gae_lambda"])
+    assert clip_eps == PPO_CLIP_EPS_CANONICAL, f"PPO clip_eps must be 0.2 (brief §2.3), got {clip_eps}"
+    assert gae_lambda == PPO_GAE_LAMBDA_CANONICAL, (
+        f"PPO gae_lambda must be 0.95 (PRD-GAE FR-4), got {gae_lambda}"
+    )
+    resolved = {"clip_eps": clip_eps, "gae_lambda": gae_lambda}
+    for field_name, cfg_key, caster in _PPO_TUNABLES:
+        resolved[field_name] = caster(ppo[cfg_key])
+    return resolved

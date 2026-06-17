@@ -34,7 +34,7 @@ NODES: list[tuple[str, str]] = [
     ("SkillsGraphEnv state", "V≤512, edges, node features"),
     ("PolicyNet", "actor + critic, A_max=45057"),
     ("Action", "SPLIT / MERGE / REWIRE / NOOP"),
-    ("_apply_action", "mutates graph in-place"),
+    ("_apply_action", "slot-correct resolver → refactor_ops"),
     ("compute_reward", "α·ΔMod + β·ΔCoh − γ·Coup + P_skills"),  # noqa: RUF001
     ("GAE buffer", "λ=0.95, γ=0.99"),  # noqa: RUF001
     ("PPO update", "clipped surrogate, ε=0.2"),
