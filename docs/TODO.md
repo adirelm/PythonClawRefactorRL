@@ -300,7 +300,7 @@ diagrams.
 | T04-05 | Author `docs/ESSAY.md` — 2500–3000 words, 4 sections (motivation, method, results, limitations), 8–12 citations, 2 diagrams; Results section cites D6 learning curve + D7 ΔReward | Authoring §2.4 essay | 4 | +900 docs | §2.4-essay | Word count in [2500, 3000]; ≥8 citations; 2 diagrams referenced; D6 + D7 cross-linked |
 | T04-06 | Author `notebooks/analysis.ipynb` §Cost + §Ablations + §Essay-summary — consumes SDK only | Authoring notebook §Cost/Ablations | 4 | +200 nb | §2.4-nb | Notebook imports SDK only (no parallel impl); LaTeX blocks precede plots |
 | T04-07 | Author `docs/shared/PROMPTS.md` — verbatim prompts used (architect → implementer trail per §1.4) with human-judgment annotations | Authoring PROMPTS.md | 4 | +200 docs | §1.4 | Every prompt mapped to a commit hash; decisions annotated |
-| T04-08 | Run final gate sweep — ruff clean, all `.py` ≤150 LOC, coverage ≥85%, notebook executes top-to-bottom, no PII matches | Running final gate sweep | 4 | 0 | (gates) | `make check` (or scripted equivalent) exits 0; `grep -E "REDACTED-NAME\|REDACTED-HANDLE\|REDACTED\|REDACTED-ID\|GoogleDrive-REDACTED-HANDLE"` returns zero matches |
+| T04-08 | Run final gate sweep — ruff clean, all `.py` ≤150 LOC, coverage ≥85%, notebook executes top-to-bottom, no PII matches | Running final gate sweep | 4 | 0 | (gates) | `make check` (or scripted equivalent) exits 0; the PII deny-list grep (full name, personal email, student ID, home-dir path — literal values kept ONLY in the git-ignored cover sheet) returns zero matches in the tracked tree |
 | T04-09 | Export submission PDF `adrl-001-ex04.pdf` (no numeric self-grade — honest framing per `docs/QUALITY.md` + `docs/PRD.md` §7; brief does not request a self-grade) | Exporting submission PDF | 4 | +0 | (submission) | PDF exists at repo root; carries honest-limitations framing, no 0–100 score |
 | T04-10 | Invite `rmisegal` as read-only collaborator on the A4 GitHub repo; record invitation ID in `docs/SUBMISSION.md` | Inviting rmisegal as read-only collaborator | 4 | +0 | (submission) | Invitation sent with **Read** role; invitation ID recorded |
 | T04-11 | Tag submission commit `assignment-4`, push branch | Tagging submission and pushing branch | 4 | +0 | (submission) | Tag pushed |
@@ -327,7 +327,7 @@ below is satisfied.
 | Learning curve PNG (D6) exists + ΔReward (D7) numeric | `results/learning_curves/reward_vs_episode.png` present (rendered by `scripts/render_learning_curve.py`); ΔReward numeric in `docs/ANALYSIS.md` | 3 |
 | Ablation cells have ≥5 seeds and CI | `summary.csv` schema check in T04-03 | 4 |
 | Cost envelope (D8) recorded in `docs/COST_ANALYSIS.md` | T04-01 acceptance check | 4 |
-| No PII matches against deny-list | `grep -E "REDACTED-NAME\|REDACTED-HANDLE\|REDACTED\|REDACTED-ID\|GoogleDrive-REDACTED-HANDLE"` returns zero matches in tree (the literal pattern lives only in this TODO row and in CLAUDE.md) | 0 |
+| No PII matches against deny-list | grepping the PII deny-list (full name, personal email, student ID, home-dir path) returns zero matches in the tracked tree; the literal values are kept ONLY in the git-ignored Moodle cover sheet, never committed | 0 |
 | Commit subject matches `^(Phase \d+\|Phase 0 bootstrap\|chore: bootstrap)` | git log walk in T04-08 final sweep | 0 |
 
 ## §3.6 Phase 0.1 — Review closure (✅ landed)

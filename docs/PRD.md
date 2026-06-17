@@ -482,9 +482,9 @@ Inherited from `CLAUDE.md` Hard Constraints, plus A4-specific additions.
 - **N10**. Token P95 budget. The `Skills` module token count (cl100k_base)
   must not regress > 5 % from the baseline snapshot taken at Phase 0;
   enforced by `tests/test_token_budget.py`.
-- **N11**. Forbidden PII list ("REDACTED-NAME", "REDACTED-HANDLE", "REDACTED",
-  "REDACTED-ID", "GoogleDrive-REDACTED-HANDLE") never appears in any tracked
-  file. Pre-commit grep guard.
+- **N11**. The PII deny-list (full name, personal email handles, student ID,
+  home-dir path — kept only in the git-ignored Moodle cover sheet, never in
+  tracked content) never appears in any tracked file. Pre-commit grep guard.
 
 ---
 
