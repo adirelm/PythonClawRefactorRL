@@ -29,21 +29,20 @@ sys.modules["collect_phase_corpora"] = collect_mod
 _SPEC.loader.exec_module(collect_mod)
 
 
-def _has_git_history() -> bool:
-    """True iff this checkout is a git repo with at least one commit.
+def _git(*args: str) -> subprocess.CompletedProcess:
+    """Run a git command in the repo, capturing output (never raises on failure)."""
+    return subprocess.run(["git", *args], cwd=_REPO_ROOT, capture_output=True, text=True, check=False)
 
-    Guards the history-dependent tests so a vanished ``.git`` (Google Drive
-    sync) or shallow checkout SKIPS rather than fails — the corpus contract is
-    only meaningful when history is present (CI uses fetch-depth: 0).
+
+def _has_git_history() -> bool:
+    """True iff this checkout is a git repo with >=1 commit.
+
+    Guards the history-dependent tests so a vanished ``.git`` (Google Drive sync)
+    or shallow checkout SKIPS rather than fails — the corpus contract is only
+    meaningful when history is present (CI uses fetch-depth: 0).
     """
     try:
-        out = subprocess.run(
-            ["git", "rev-list", "--max-parents=0", "HEAD"],
-            cwd=_REPO_ROOT,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+        out = _git("rev-list", "--max-parents=0", "HEAD")
     except FileNotFoundError:
         return False
     return out.returncode == 0 and bool(out.stdout.strip())
@@ -89,13 +88,7 @@ def test_phase_boundaries_match_commits(output_dir: Path) -> None:
     assert rc == 0
     for phase in (1, 2, 3):
         marker = f"phase {phase}"
-        present_in_history = subprocess.run(
-            ["git", "log", "--format=%s", "HEAD"],
-            cwd=_REPO_ROOT,
-            capture_output=True,
-            text=True,
-            check=True,
-        ).stdout.lower()
+        present_in_history = _git("log", "--format=%s", "HEAD").stdout.lower()
         if marker not in present_in_history:
             continue  # phase not labelled in this history — nothing to assert
         recs = [
@@ -157,13 +150,7 @@ def test_git_range_override(output_dir: Path) -> None:
     The range boundary is resolved at runtime (root commit .. HEAD) rather than
     a hardcoded SHA, so it survives a rewritten history.
     """
-    root = subprocess.run(
-        ["git", "rev-list", "--max-parents=0", "HEAD"],
-        cwd=_REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout.split()[0]
+    root = _git("rev-list", "--max-parents=0", "HEAD").stdout.split()[0]
     rc = collect_mod.main(
         [
             "--output-dir",
